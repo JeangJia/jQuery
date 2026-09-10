@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        .box {
+            height: 200px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            /* border: 1px solid #000; */
+        }
+
+        .box div {
+            width: 100px;
+            height: 100px;
+            background-color: red;
+        }
+    </style>
+</head>
+<script src="jQuery.min.js"></script>
+
+<body>
+    <div class="box">
+        <div class="item1"></div>
+        <div class="item2"></div>
+        <div class="item3"></div>
+        <div class="item4"></div>
+    </div>
+    <script>
+        // 隐式迭代:遍历所有选中的元素,对每个元素执行相同的操作
+        $('.box div').css('background-color', 'blue');
+        // 筛选选择器(本质就是CSS选择器的筛选功能)
+        $('.box div:nth-child(2n+1)').css('background-color', 'green');
+        /*
+        筛选方法
+            1. find()      --筛选所有子元素
+            2. children()  --筛选直接子元素
+            3. parent()    --筛选父元素
+            4. parents()   --筛选所有父元素
+        */
+        // 筛选所有子元素
+        $('.box').find('div').css('background-color', 'orange');
+        $('.box .item2').parent().css('background-color', 'pink');
+    </script>
+</body>
+
+</html>
