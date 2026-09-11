@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        a {
+            text-decoration: none;
+        }
+
+        .nav {
+            height: 200px;
+            width: 100px;
+            /* border: 1px solid #000; */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .nav>a {
+            width: 100%;
+            height: 40px;
+            flex-shrink: 0;
+            background-color: pink;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav>ul {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            transition: all 0.5s;
+        }
+
+        .nav.open>ul {
+            display: flex;
+        }
+
+        .nav>ul>li {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        li a {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+
+<body>
+    <script src="jQuery.min.js"></script>
+    <div class="nav">
+        <a href="#">首页</a>
+        <ul>
+            <li><a href="#">个人</a></li>
+            <li><a href="#">投稿</a></li>
+            <li><a href="#">私信</a></li>
+            <li><a href="#">设置</a></li>
+            <li><a href="#">退出</a></li>
+        </ul>
+    </div>
+    <script>
+        $(function () {
+            $('.nav>a').mouseenter(function () {
+                $(this).parent('.nav').addClass('open');
+            });
+
+            $('.nav').mouseleave(function () {
+                $(this).removeClass('open');
+            });
+        });
+    </script>
+</body>
+
+</html>
