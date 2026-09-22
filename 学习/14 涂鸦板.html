@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>涂鸦板 - 冒泡的实战应用</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #fce4ec, #e1f5fe);
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+
+        .studio {
+            background: #fff;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,.1);
+            max-width: 720px; width: 100%;
+        }
+
+        h2 { color: #333; margin-bottom: 4px; }
+        .sub { color: #999; font-size: 12px; margin-bottom: 18px; }
+
+        /* ---------- 工具栏 ---------- */
+        .toolbar {
+            display: flex; align-items: center; gap: 10px;
+            padding: 12px; background: #fafafa; border-radius: 10px;
+            margin-bottom: 14px; flex-wrap: wrap;
+        }
+        .tool-label { font-size: 13px; color: #666; }
+
+        .palette { display: flex; gap: 6px; }
+        .color {
+            width: 32px; height: 32px; border-radius: 50%;
+            border: 3px solid transparent; cursor: pointer;
+            transition: all .15s;
+        }
+        .color:hover  { transform: scale(1.1); }
+        .color.active { border-color: #333; transform: scale(1.15); }
+
+        .eraser {
+            padding: 6px 12px; background: #fff;
+            border: 2px solid #ddd; border-radius: 16px;
+            cursor: pointer; font-size: 13px; color: #666;
+        }
+        .eraser.active { border-color: #333; color: #333; background: #f0f0f0; }
+
+        .toolbar .spacer { flex: 1; }
+        .toolbar .info {
+            font-size: 12px; color: #888;
+            font-family: Consolas, monospace;
+        }
+        .toolbar .info b { color: #1d6fea; }
+
+        .btn {
+            padding: 6px 14px; border: none; border-radius: 6px;
+            cursor: pointer; font-size: 13px; transition: all .15s;
+        }
+        .btn-clear { background: #f0f0f0; color: #666; }
+        .btn-clear:hover { background: #e0e0e0; }
+        .btn-export { background: #1d6fea; color: #fff; }
+        .btn-export:hover { background: #0d5ed8; }
+
+        /* ---------- 画布 ---------- */
+        .canvas {
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            gap: 2px;
+            padding: 10px;
+            background: #fafafa;
+            border-radius: 8px;
+            border: 2px solid #eee;
+            user-select: none;
+        }
+
+        .cell {
+            aspect-ratio: 1;
+            background: #fff;
+            border-radius: 2px;
+            cursor: crosshair;
+            transition: background .08s;
+        }
+
+        .canvas.painting { cursor: crosshair; }
+
+        /* ---------- 状态条 ---------- */
+        .status {
+            margin-top: 12px; padding: 10px 14px;
+            background: #f8f9fa; border-radius: 6px;
+            font-size: 12px; color: #888; line-height: 1.6;
+        }
+        .status b { color: #1d6fea; }
+        .status .hint { display: block; margin-top: 4px; color: #aaa; }
+    </style>
+</head>
+<script src="jQuery.min.js"></script>
+
+<body>
+    <div class="studio">
+        <h2>🎨 涂鸦板</h2>
+        <p class="sub">用冒泡机制做的拖拽涂色——按住鼠标在画布上拖动即可连续涂色</p>
+
+        <!-- 工具栏 -->
+        <div class="toolbar">
+            <span class="tool-label">画笔：</span>
+            <div class="palette" id="palette">
+                <div class="color active" data-color="#e74c3c" style="background:#e74c3c"></div>
+                <div class="color" data-color="#f39c12" style="background:#f39c12"></div>
+                <div class="color" data-color="#f1c40f" style="background:#f1c40f"></div>
+                <div class="color" data-color="#27ae60" style="background:#27ae60"></div>
+                <div class="color" data-color="#1d6fea" style="background:#1d6fea"></div>
+                <div class="color" data-color="#9b59b6" style="background:#9b59b6"></div>
+                <div class="color" data-color="#000000" style="background:#000"></div>
+            </div>
+            <div class="eraser" id="eraser">🩹 橡皮</div>
+            <div class="spacer"></div>
+            <span class="info">已涂 <b id="cnt">0</b> 格</span>
+            <button class="btn btn-export" id="export">导出</button>
+            <button class="btn btn-clear"  id="clear">清空</button>
+        </div>
+
+        <!-- 画布 -->
+        <div class="canvas" id="canvas"></div>
+
+        <div class="status">
+            原理：<b>mousedown</b> 在某个格子上触发 → 用 <b>mousemove</b> 委托给 document
+            监听后续移动 → 经过的每个格子都被涂上当前色 → <b>mouseup</b> 停止。
+            <span class="hint">💡 在格子之间快速拖动试试看——这全靠冒泡让一个监听器覆盖整个画布</span>
+        </div>
+    </div>
+
+    <script>
+        var $canvas = $('#canvas');
+        var COLS = 20, ROWS = 12;
+        var currentColor = '#e74c3c';
+        var isErasing = false;
+        var isPainting = false;
+        var painted = 0;
+
+        // ============ 1. 用 each + 字符串拼接 一次性生成 240 个格子 ============
+        var html = '';
+        for (var r = 0; r < ROWS; r++) {
+            for (var c = 0; c < COLS; c++) {
+                html += '<div class="cell" data-r="' + r + '" data-c="' + c + '"></div>';
+            }
+        }
+        $canvas.html(html);
+
+        // ============ 2. 选颜色 ============
+        $('#palette').on('click', '.color', function () {
+            isErasing = false;
+            $('#eraser').removeClass('active');
+            $('.color').removeClass('active');
+            $(this).addClass('active');
+            currentColor = $(this).data('color');
+        });
+
+        $('#eraser').on('click', function () {
+            isErasing = true;
+            $('.color').removeClass('active');
+            $(this).addClass('active');
+        });
+
+        // ============ 3. 涂色核心：靠冒泡 ==================
+        // (1) mousedown 在某个格子上：开始"画"
+        $canvas.on('mousedown', '.cell', function (e) {
+            isPainting = true;
+            $canvas.addClass('painting');
+            paint($(this));
+            // 阻止默认的拖选文字
+            e.preventDefault();
+        });
+
+        // (2) mousemove 委托给 document：随时可能经过画布任意格子
+        //  —— 这里是冒泡的精髓：不论鼠标从哪个格子进入，
+        //     事件都会冒泡到 document
+        $(document).on('mousemove', function (e) {
+            if (!isPainting) return;
+            // 用 elementFromPoint 拿到鼠标当前**真实**位置下的元素
+            // —— 这才是"拖动经过所有格子"的关键
+            var el = document.elementFromPoint(e.clientX, e.clientY);
+            if (!el) return;
+            // 找到最近的 .cell（处理格子间缝隙时点中 canvas 本体的情况）
+            var $cell = $(el).closest('.cell');
+            if ($cell.length && $canvas.has($cell).length) {
+                paint($cell);
+            }
+        });
+
+        // (3) mouseup 在任意位置：停止画
+        $(document).on('mouseup', function () {
+            isPainting = false;
+            $canvas.removeClass('painting');
+        });
+
+        // 封装：给某个格子涂色或擦除
+        function paint($cell) {
+            if ($cell.hasClass('painted') && !isErasing) return;
+            if (isErasing) {
+                if ($cell.css('background-color') === 'rgba(0, 0, 0, 0)') return; // 已是白
+                $cell.css('background-color', '#fff').removeAttr('data-c');
+                $cell.removeClass('painted');
+                painted--;
+            } else {
+                $cell.css('background-color', currentColor).addClass('painted');
+                painted++;
+            }
+            $('#cnt').text(painted);
+        }
+
+        // ============ 4. 清空 ============
+        $('#clear').on('click', function () {
+            $('.cell').css('background-color', '#fff').removeClass('painted').removeAttr('data-c');
+            painted = 0;
+            $('#cnt').text(0);
+        });
+
+        // ============ 5. 导出 ASCII 艺术 ============
+        $('#export').on('click', function () {
+            var art = '';
+            $('.cell').each(function (i) {
+                if (i % COLS === 0 && i > 0) art += '\n';
+                if ($(this).hasClass('painted')) art += '██';
+                else                              art += '  ';
+            });
+            console.log('====== 你的作品 ======');
+            console.log(art);
+            alert('作品已导出到控制台！按 F12 查看');
+        });
+    </script>
+</body>
+
+</html>
