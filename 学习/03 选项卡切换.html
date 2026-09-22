@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>选项卡 - index() + eq() + siblings()</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        .tabs {
+            width: 400px;
+            margin: 100px auto;
+        }
+
+        .nav {
+            list-style: none;
+            overflow: hidden;
+        }
+
+        .nav li {
+            float: left;
+            width: 100px;
+            height: 40px;
+            line-height: 40px;
+            text-align: center;
+            background: #ccc;
+            cursor: pointer;
+        }
+
+        /* 当前选中的导航高亮 */
+        .nav li.current {
+            background: #e1251b;
+            color: #fff;
+        }
+
+        .content div {
+            display: none;
+            height: 200px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-top: none;
+        }
+
+        /* 当前选中的内容显示 */
+        .content div.current {
+            display: block;
+        }
+    </style>
+</head>
+<script src="jQuery.min.js"></script>
+
+<body>
+    <div class="tabs">
+        <ul class="nav">
+            <li class="current">电影</li>
+            <li>电视剧</li>
+            <li>综艺</li>
+            <li>动漫</li>
+        </ul>
+        <div class="content">
+            <div class="current">电影内容区</div>
+            <div>电视剧内容区</div>
+            <div>综艺内容区</div>
+            <div>动漫内容区</div>
+        </div>
+    </div>
+    <script>
+        // 核心思路：
+        // 1. 点击 li 时，用 index() 拿到"我是第几个"
+        // 2. 用 eq(索引) 精准找到 content 里"对应的那一个"显示
+        // 3. 用 siblings() 把"其他的兄弟"都取消选中
+        $('.nav li').click(function () {
+            // 当前点击的 li 高亮，其余兄弟取消高亮
+            $(this).addClass('current').siblings().removeClass('current');
+
+            // 拿到点击的是第几个
+            var idx = $(this).index();
+            console.log('点击了第 ' + idx + ' 个选项卡');
+
+            // 用 eq(索引) 找到对应内容区：显示它，隐藏它的兄弟们
+            $('.content div').eq(idx).show().siblings().hide();
+        });
+    </script>
+</body>
+
+</html>

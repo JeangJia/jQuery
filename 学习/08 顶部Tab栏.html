@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>顶部 Tab 栏 - each() + index() + eq() + 事件委托</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            background: #f5f6fa;
+            padding: 40px 20px;
+        }
+
+        .tab-box {
+            max-width: 720px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, .08);
+            overflow: hidden;
+        }
+
+        /* ---------- 顶部选项栏 ---------- */
+        /* tab-bar 只负责布局，tab-nav 里只有 .tab，保证 index() 准确 */
+        .tab-bar {
+            display: flex;
+            align-items: center;
+            background: #fafbfc;
+            border-bottom: 1px solid #eee;
+            padding: 0 16px 0 12px;
+        }
+
+        .tab-nav { display: flex; }
+
+        .tab-nav .tab {
+            position: relative;
+            padding: 16px 22px;
+            font-size: 15px;
+            color: #666;
+            cursor: pointer;
+            user-select: none;
+            transition: color .2s;
+            white-space: nowrap;
+        }
+
+        .tab-nav .tab:hover { color: #1d6fea; }
+
+        .tab-nav .tab.active {
+            color: #1d6fea;
+            font-weight: bold;
+        }
+
+        /* 下划线用伪元素做，切换时宽度平滑过渡 */
+        .tab-nav .tab::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            bottom: 0;
+            width: 0;
+            height: 3px;
+            background: #1d6fea;
+            border-radius: 3px 3px 0 0;
+            transform: translateX(-50%);
+            transition: width .25s;
+        }
+
+        .tab-nav .tab.active::after { width: 60%; }
+
+        /* 新增按钮 */
+        .add-btn {
+            margin-left: auto;
+            padding: 6px 14px;
+            border: 1px dashed #1d6fea;
+            color: #1d6fea;
+            background: none;
+            border-radius: 16px;
+            font-size: 13px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .add-btn:hover { background: #eaf2ff; }
+
+        /* ---------- 内容面板 ---------- */
+        .tab-content { padding: 28px; min-height: 220px; }
+
+        .panel { display: none; animation: fade .28s; }
+        .panel.active { display: block; }
+
+        @keyframes fade {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .panel h3 { margin-bottom: 12px; color: #333; }
+        .panel p  { margin-top: 12px; line-height: 1.9; color: #666; font-size: 14px; }
+
+        .panel .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            margin-right: 6px;
+            background: #eaf2ff;
+            color: #1d6fea;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+
+        .tip {
+            max-width: 720px;
+            margin: 16px auto 0;
+            font-size: 13px;
+            color: #999;
+            line-height: 1.8;
+        }
+        .tip b { color: #1d6fea; }
+    </style>
+</head>
+<script src="jQuery.min.js"></script>
+
+<body>
+
+    <div class="tab-box">
+        <!-- 顶部选项栏 -->
+        <div class="tab-bar">
+            <div class="tab-nav" id="tabNav"></div>
+            <button class="add-btn" id="addBtn">+ 新增标签</button>
+        </div>
+
+        <!-- 内容区 -->
+        <div class="tab-content" id="tabContent"></div>
+    </div>
+
+    <p class="tip">
+        用到的 API：<b>.each()</b> 遍历数据批量生成标签 <b>.index()</b> 取点击位置
+        <b>.eq()</b> 定位对应面板 <b>.on() 事件委托</b> 让后新增的标签也能点击
+    </p>
+
+    <script>
+        // ============ 1. 数据源 ============
+        var tabData = [
+            { title: '首页', tags: ['推荐', '热榜'],       text: '首页面板：欢迎来到 jQuery 顶部 Tab 栏示例。' },
+            { title: '课程', tags: ['HTML', 'CSS', 'JS'], text: '课程面板：这里展示课程列表相关内容。' },
+            { title: '笔记', tags: ['草稿', '收藏'],       text: '笔记面板：记录你的学习心得与代码片段。' },
+            { title: '设置', tags: ['账号', '外观'],       text: '设置面板：修改个人信息与主题偏好。' }
+        ];
+
+        var $nav = $('#tabNav');
+        var $content = $('#tabContent');
+        var nextId = tabData.length; // 用于新增标签命名
+        // ============ 2. each() 遍历数据 → 创建 DOM → 插入页面 ============
+        $.each(tabData, function (i, item) {
+            createTab(item.title, item.tags, item.text);
+        });
+        switchTo(0);
+        function createTab(title, tags, text) {
+            // --- 创建 tab 按钮 ---
+            var $tab = $('<div class="tab"></div>').text(title);
+            $nav.append($tab);              // 插入顶部导航（只含 .tab，index 才准）
+
+            // --- 创建面板 ---
+            var $panel = $('<div class="panel"></div>');
+            $panel.append($('<h3></h3>').text(title));
+
+            // 再用一次 each() 渲染徽章数组
+            $.each(tags, function (i, tag) {
+                $panel.append($('<span class="badge"></span>').text(tag));
+            });
+
+            $panel.append($('<p></p>').text(text));
+            $content.append($panel);        // 插入内容区
+        }
+
+        // ============ 3. 事件委托：点击切换 ============
+        $nav.on('click', '.tab', function () {
+            switchTo($(this).index());
+        });
+        function switchTo(i) {
+            $nav.children('.tab')
+                .eq(i).addClass('active')      // 第 i 个按钮高亮
+                .siblings().removeClass('active');
+
+            $content.children('.panel')
+                .eq(i).addClass('active')      // 第 i 个面板显示
+                .siblings().removeClass('active');
+
+            console.log('当前切换到：' + $nav.children('.tab').eq(i).text());
+        }
+        // ============ 4. 新增标签（验证委托是否生效） ============
+        $('#addBtn').click(function () {
+            nextId++;
+            createTab('标签' + nextId, ['新建'], '这是动态添加的第 ' + nextId + ' 个面板。');
+            // 新增后立刻切到它（它是最后一个 .tab）
+            switchTo($nav.children('.tab').length - 1);
+        });
+    </script>
+</body>
+
+</html>

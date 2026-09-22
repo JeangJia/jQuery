@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh‑CN">
+<head>
+  <meta charset="UTF‑8">
+  <title>选择器练习</title>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+</head>
+<body>
+  <div id="box">我是id盒子</div>
+  <div class="item">条目1</div>
+  <div class="item">条目2</div>
+  <p>段落标签</p>
+
+  <script>
+    //1.ID选择器 #id
+    $("#box").css("color","red");
+    //2.类选择器 .class
+    $(".item").css("fontSize","20px");
+    //3.标签选择器
+    $("p").css("background","#ccc");
+  </script>
+</body>
+</html>

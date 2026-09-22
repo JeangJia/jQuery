@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星级评分 - .on() 版</title>
+    <style>
+        * { margin: 0; padding: 0; }
+
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            background: #f5f6fa;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .rating {
+            width: 360px;
+            padding: 30px 40px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, .08);
+            text-align: center;
+        }
+
+        .stars {
+            font-size: 44px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .star {
+            color: #ddd;
+            transition: color .12s, transform .12s;
+            display: inline-block;
+        }
+
+        .star.on       { color: #f5a623; }
+        .star:not(.on):hover { transform: scale(1.15); }
+
+        .text {
+            margin-top: 18px;
+            font-size: 16px;
+            color: #666;
+            min-height: 24px;
+        }
+        .text strong { color: #e1251b; }
+
+        .reset {
+            margin-top: 14px;
+            padding: 6px 16px;
+            border: 1px solid #ddd;
+            background: #fff;
+            color: #666;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .reset:hover { background: #fafafa; }
+    </style>
+</head>
+<script src="jQuery.min.js"></script>
+<body>
+    <div class="rating">
+        <div class="stars" id="stars">
+            <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span
+                class="star">★</span>
+        </div>
+        <p class="text" id="text">请给本店打分（<strong>0</strong> 分）</p>
+        <button class="reset" id="reset">重置</button>
+    </div>
+    <script>
+        var $stars = $('#stars');
+        var $text  = $('#text');
+        var texts  = ['非常差', '较差', '一般', '满意', '非常满意'];
+        var result = 0;
+        // ===== .on() 的几种用法 =====
+        // ① 单个事件 + 直接绑定
+        // 等价于 .click()，但 .on() 是 jQuery 统一的事件入口
+        $stars.children('.star').on('click', function () {
+            result = $(this).index() + 1;
+            lightTo(result - 1);
+            $text.html('你打了 <strong>' + texts[result - 1] + '</strong>（' + result + ' 分）');
+        });
+        // ② 多个事件共享同一个函数（空格分隔）
+        // 鼠标进入或离开都触发：进入时亮预览，离开时回到已确认分数
+        $stars.on('mouseover mouseleave', '.star', function (e) {
+            if (e.type === 'mouseover') {
+                lightTo($(this).index());          // 亮到当前这颗
+            } else {
+                lightTo(result - 1);               // 恢复成已确认分数
+            }
+        });
+        // ③ 一次性绑定多个事件的不同处理函数（对象写法）
+        // 比 mouseenter/mouseleave/click 三个分开绑更整齐
+        $stars.on({
+            'mouseenter': function () { /* 仅占位，已在上面处理 */ },
+            'click':      function () { /* 已上面处理 */ }
+        }, '.star');
+        // ④ 命名空间：方便单独移除某类事件，不影响其他
+        // 这里仅演示用，不会被触发
+        $stars.on('click.testNamespace', '.star', function () {
+            // 可以通过 .off('click.testNamespace') 单独移除带命名空间的事件
+            console.log('命名空间 click 触发');
+        });
+        // ===== 工具函数 =====
+        function lightTo(n) {
+            $stars.children('.star').each(function (i) {
+                $(this).toggleClass('on', i <= n);
+            });
+        }
+        // ===== .off() 演示（点击重置时移除命名空间事件） =====
+        $('#reset').on('click', function () {
+            result = 0;
+            lightTo(-1);
+            $text.html('请给本店打分（<strong>0</strong> 分）');
+            // 验证命名空间：移除带 testNamespace 的 click，不再打印日志
+            $stars.off('click.testNamespace');
+            console.log('已移除 click.testNamespace');
+        });
+    </script>
+</body>
+
+</html>

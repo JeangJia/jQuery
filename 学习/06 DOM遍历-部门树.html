@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>部门树 - DOM 方法家族</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { font-family: "Microsoft YaHei", sans-serif; padding: 20px; background: #fafafa; }
+
+        .tree { background: #fff; padding: 16px; border-radius: 6px; width: 340px;
+                box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+
+        .tree ul { list-style: none; padding-left: 24px; }
+
+        .node {
+            padding: 6px 10px; cursor: pointer; border-radius: 4px;
+            line-height: 22px;
+        }
+        .node:hover { background: #eef; }
+
+        /* 高亮：用 children() 给直接子元素加背景 */
+        .node.active { background: #d6e8ff; color: #1d6fea; font-weight: bold; }
+
+        /* 折叠图标 */
+        .has-child::before { content: "▼ "; color: #999; font-size: 11px; }
+        .collapsed::before { content: "▶ "; color: #999; font-size: 11px; }
+
+        .log {
+            margin-top: 16px; padding: 10px 14px; background: #1e1e1e; color: #b5e853;
+            border-radius: 4px; font-family: Consolas, monospace; font-size: 13px;
+            min-height: 80px;
+        }
+        .log span { color: #f7c843; }
+    </style>
+</head>
+<script src="jQuery.min.js"></script>
+
+<body>
+    <h3>点击任意节点，查看 jQuery DOM 遍历方法的结果</h3>
+    <div class="tree">
+        <ul>
+            <li><div class="node has-child">公司</div>
+                <ul>
+                    <li><div class="node has-child">技术部</div>
+                        <ul>
+                            <li><div class="node">前端组</div></li>
+                            <li><div class="node">后端组</div></li>
+                            <li><div class="node">测试组</div></li>
+                        </ul>
+                    </li>
+                    <li><div class="node has-child">市场部</div>
+                        <ul>
+                            <li><div class="node">推广组</div></li>
+                            <li><div class="node">运营组</div></li>
+                        </ul>
+                    </li>
+                    <li><div class="node">财务部</div></li>
+                </ul>
+            </li>
+        </ul>
+    </div>
+    <div class="log" id="log">日志区：</div>
+
+    <script>
+        // 给所有"有子节点的 node"绑定折叠
+        $('.has-child').click(function (e) {
+            e.stopPropagation();
+            $(this).toggleClass('has-child collapsed')
+                   .parent().children('ul').slideToggle();
+        });
+
+        // 给每个叶子节点（直接子元素中没有 ul 的）绑定分析
+        $('.node').click(function () {
+            $('.node').removeClass('active');
+            $(this).addClass('active');
+
+            var $me = $(this);
+            // ① parent()：找直接父 li
+            var $parentLi = $me.parent('li');
+            // ② parents('li')：找所有祖先 li（含自己父级及以上）
+            var $ancestors = $me.parents('li');
+            // ③ siblings()：找同一级（li 之间）的兄弟
+            var $siblings = $parentLi.siblings('li').children('.node');
+            // ④ children('ul > li > .node')：所有后代子节点
+            var $descendants = $me.parent().find('ul > li > .node');
+            // ⑤ index()：自己在一级兄弟中的位置
+            var idx = $me.parent().index();
+
+            var log = '';
+            log += '当前节点：<span>' + $me.text() + '</span><br>';
+            log += 'parent() → 直接父 li：<span>' + ($parentLi.length ? '找到' : '无') + '</span><br>';
+            log += 'parents("li").length() → 祖先节点数：<span>' + $ancestors.length + '</span><br>';
+            log += 'siblings() 同级兄弟数：<span>' + $siblings.length + '</span><br>';
+            log += 'find() 后代节点数：<span>' + $descendants.length + '</span><br>';
+            log += 'index() → 我是父级第 <span>' + (idx + 1) + '</span> 个孩子';
+
+            $('#log').html('日志区：<br>' + log);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件删除场景 - 分级处理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Microsoft YaHei", Consolas, monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container { max-width: 780px; margin: 0 auto; }
+
+        h2 { color: #fff; margin-bottom: 12px; font-size: 18px; }
+
+        /* ---------- 顶部状态栏 ---------- */
+        .toolbar {
+            display: flex; gap: 12px; align-items: center;
+            padding: 10px 16px; background: #252526;
+            border-radius: 6px; margin-bottom: 16px;
+            font-size: 13px; border: 1px solid #333;
+            flex-wrap: wrap;
+        }
+        .toolbar span { color: #999; }
+        .toolbar b { color: #4ec9b0; font-family: Consolas, monospace; }
+        .toolbar .spacer { flex: 1; }
+        .toolbar .btn-danger {
+            padding: 6px 14px; background: #f48771;
+            color: #fff; border: none; border-radius: 4px;
+            cursor: pointer; font-size: 12px;
+        }
+        .toolbar .btn-danger:hover { background: #d77463; }
+
+        /* ---------- 文件浏览器 ---------- */
+        .explorer {
+            background: #252526; border: 1px solid #333;
+            border-radius: 6px; overflow: hidden;
+        }
+        .ex-head {
+            padding: 10px 16px; background: #2d2d30;
+            border-bottom: 1px solid #333;
+            font-size: 13px; color: #999;
+        }
+        .ex-head::before { content: "📂 "; color: #c5c5c5; }
+
+        .tree { padding: 8px 0; max-height: 460px; overflow-y: auto; }
+
+        .item {
+            display: flex; align-items: center;
+            padding: 6px 16px; cursor: pointer;
+            transition: background .12s; font-size: 13px;
+            border-left: 3px solid transparent;
+        }
+        .item:hover { background: #2a2d2e; }
+        .item.selected { background: #094771; border-left-color: #1d6fea; }
+        .item.removing { background: #5a1d1d !important; }
+
+        .ico { width: 20px; display: inline-block; text-align: center; margin-right: 6px; }
+        .ico.folder { color: #d7ba7d; }
+        .ico.file   { color: #9cdcfe; }
+
+        .name { flex: 1; }
+        .meta { font-size: 11px; color: #888; margin-right: 12px; }
+
+        .btn-del {
+            padding: 3px 10px; background: transparent;
+            border: 1px solid #555; color: #f48771;
+            border-radius: 3px; cursor: pointer; font-size: 11px;
+            opacity: 0; transition: opacity .15s, all .15s;
+        }
+        .item:hover .btn-del { opacity: 1; }
+        .btn-del:hover { background: #f48771; color: #fff; border-color: #f48771; }
+
+        /* 不同类型删除按钮的提示色 */
+        .item[data-type="folder"] .btn-del {
+            color: #d7ba7d; border-color: #5a4a30;
+        }
+        .item[data-type="folder"] .btn-del:hover {
+            background: #d7ba7d; color: #1e1e1e; border-color: #d7ba7d;
+        }
+
+        /* ---------- 回收站 ---------- */
+        .trash {
+            margin-top: 20px; background: #252526;
+            border: 1px solid #333; border-radius: 6px;
+            overflow: hidden;
+        }
+        .trash-head {
+            padding: 10px 16px; background: #2d2d30;
+            cursor: pointer; font-size: 13px;
+            border-bottom: 1px solid #333;
+        }
+        .trash-head::before { content: "🗑 "; }
+        .trash-head:hover { background: #343437; }
+        .trash.collapsed .trash-body { display: none; }
+
+        .trash-body { padding: 4px 0; max-height: 180px; overflow-y: auto; }
+        .trash .item { opacity: .7; }
+
+        .empty {
+            padding: 40px; text-align: center; color: #666; font-size: 13px;
+        }
+        .empty::before { content: "📭 "; display: block; font-size: 30px; margin-bottom: 8px; }
+
+        /* ---------- 模态框 ---------- */
+        .modal-mask {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,.6); z-index: 10;
+            justify-content: center; align-items: center;
+        }
+        .modal {
+            width: 380px; background: #252526; color: #d4d4d4;
+            border: 1px solid #3e3e42; border-radius: 8px;
+            padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,.6);
+            animation: zoom .2s;
+        }
+        @keyframes zoom {
+            from { transform: scale(.85); opacity: 0; }
+            to   { transform: scale(1);  opacity: 1; }
+        }
+        .modal h3 { margin-bottom: 10px; color: #fff; font-size: 16px; }
+        .modal p  { color: #999; font-size: 13px; margin-bottom: 16px; }
+        .modal p b { color: #d7ba7d; }
+
+        .modes { display: flex; flex-direction: column; gap: 8px; }
+        .mode {
+            padding: 12px; border: 1px solid #3e3e42;
+            border-radius: 6px; cursor: pointer; transition: all .15s;
+        }
+        .mode:hover { border-color: #1d6fea; background: #2d2d30; }
+        .mode.chosen { border-color: #1d6fea; background: #094771; }
+        .mode strong { color: #4ec9b0; display: block; margin-bottom: 2px; font-size: 13px; }
+        .mode small  { color: #888; font-size: 12px; }
+
+        /* 密码输入区（小弹窗）*/
+        .pwd-modal .modal { width: 320px; text-align: center; }
+        .pwd-modal input {
+            width: 100%; padding: 10px; margin-top: 8px;
+            background: #1e1e1e; border: 1px solid #3e3e42;
+            color: #d4d4d4; border-radius: 4px; font-size: 14px;
+        }
+        .pwd-modal input:focus { outline: none; border-color: #1d6fea; }
+        .pwd-modal .hint { font-size: 12px; color: #888; margin-top: 6px; }
+        .pwd-modal .hint.err { color: #f48771; }
+
+        .modal-btns { margin-top: 16px; text-align: right; }
+        .modal-btns button {
+            padding: 6px 14px; border-radius: 4px;
+            cursor: pointer; font-size: 13px;
+            border: 1px solid #3e3e42;
+        }
+        .modal-btns .btn-cancel  { background: #2d2d30; color: #ccc; }
+        .modal-btns .btn-cancel:hover { background: #3e3e42; }
+        .modal-btns .btn-confirm { background: #f48771; color: #fff; border-color: #f48771; }
+        .modal-btns .btn-confirm:hover { background: #d77463; }
+    </style>
+</head>
+<script src="jQuery.min.js"></script>
+
+<body>
+    <div class="container">
+        <h2>💻 my-project</h2>
+
+        <div class="toolbar">
+            <span>文件 <b id="totalCount">0</b></span>
+            <span>回收站 <b id="trashCount">0</b></span>
+            <span>已删 <b id="goneCount">0</b></span>
+            <span class="spacer"></span>
+            <button class="btn-danger" id="deleteProject">🗑 删除整个项目</button>
+        </div>
+
+        <div class="explorer">
+            <div class="ex-head">my-project</div>
+            <div class="tree" id="tree"></div>
+        </div>
+
+        <div class="trash collapsed" id="trash">
+            <div class="trash-head">回收站</div>
+            <div class="trash-body" id="trashBody"></div>
+        </div>
+    </div>
+
+    <!-- 文件夹删除模态框 -->
+    <div class="modal-mask" id="folderMask">
+        <div class="modal">
+            <h3>删除文件夹</h3>
+            <p>「<b id="folderName"></b>」请选择删除方式：</p>
+            <div class="modes">
+                <div class="mode" data-mode="direct">
+                    <strong>直接删除（含所有内容）</strong>
+                    <small>永久移除，文件夹内文件一同消失</small>
+                </div>
+                <div class="mode" data-mode="recycle">
+                    <strong>移到回收站</strong>
+                    <small>暂存 30 天，可随时恢复</small>
+                </div>
+            </div>
+            <div class="modal-btns">
+                <button class="btn-cancel"  id="folderCancel">取消</button>
+                <button class="btn-confirm" id="folderConfirm">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 项目删除（密码）模态框 -->
+    <div class="modal-mask pwd-modal" id="projectMask">
+        <div class="modal">
+            <h3>⚠️ 删除整个项目</h3>
+            <p>这是不可恢复的操作，请输入密码确认：</p>
+            <input type="password" id="projectPwd" placeholder="请输入密码">
+            <p class="hint">演示密码：<b>1234</b></p>
+            <div class="modal-btns">
+                <button class="btn-cancel"  id="projectCancel">取消</button>
+                <button class="btn-confirm" id="projectConfirm">确认删除</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== 项目目录数据 =====
+        var tree = [
+            { id: 1,  pid: 0,   type: 'folder', name: 'src',          meta: '文件夹' },
+            { id: 2,  pid: 1,   type: 'file',   name: 'index.js',     meta: '4.2 KB' },
+            { id: 3,  pid: 1,   type: 'file',   name: 'utils.js',     meta: '1.8 KB' },
+            { id: 4,  pid: 1,   type: 'folder', name: 'components',   meta: '文件夹' },
+            { id: 5,  pid: 4,   type: 'file',   name: 'Button.jsx',   meta: '2.1 KB' },
+            { id: 6,  pid: 4,   type: 'file',   name: 'Modal.jsx',    meta: '3.4 KB' },
+            { id: 7,  pid: 4,   type: 'file',   name: 'Input.jsx',    meta: '1.5 KB' },
+            { id: 8,  pid: 0,   type: 'folder', name: 'docs',         meta: '文件夹' },
+            { id: 9,  pid: 8,   type: 'file',   name: 'README.md',    meta: '6.7 KB' },
+            { id: 10, pid: 8,   type: 'file',   name: 'CHANGELOG.md', meta: '2.3 KB' },
+            { id: 11, pid: 0,   type: 'file',   name: 'package.json', meta: '1.2 KB' },
+            { id: 12, pid: 0,   type: 'file',   name: '.gitignore',   meta: '128 B' }
+        ];
+
+        var goneCount = 0;
+        var pendingFolderId = null;
+        var chosenFolderMode = '';
+
+        // ===== 渲染 =====
+        function render() {
+            var html = '';
+            function walk(parentId, level) {
+                $.each(tree, function (i, node) {
+                    if (node.pid !== parentId) return;
+                    var ico = node.type === 'folder' ? '📁' : '📄';
+                    var pad = level * 22;
+                    html += '<div class="item" data-id="' + node.id + '" '
+                          +     'data-type="' + node.type + '" '
+                          +     'style="padding-left:' + (16 + pad) + 'px">'
+                          +     '<span class="ico ' + node.type + '">' + ico + '</span>'
+                          +     '<span class="name">' + node.name + '</span>'
+                          +     '<span class="meta">' + node.meta + '</span>'
+                          +     '<button class="btn-del">删除</button>'
+                          + '</div>';
+                    if (node.type === 'folder') walk(node.id, level + 1);
+                });
+            }
+            walk(0, 0);
+            $('#tree').html(html || '<div class="empty">项目已清空</div>');
+            updateCount();
+        }
+        render();
+
+        function updateCount() {
+            $('#totalCount').text(tree.length);
+            $('#trashCount').text($('#trashBody .item').length);
+        }
+
+        // ===== 行选中 =====
+        $('#tree').on('click', '.item', function (e) {
+            if ($(e.target).hasClass('btn-del')) return;
+            $('.item').removeClass('selected');
+            $(this).addClass('selected');
+        });
+
+        // ====================================================================
+        // ★★★ 三种类型、三种处理 ★★★
+        // ====================================================================
+        $('#tree').on('click', '.btn-del', function (e) {
+            e.stopPropagation();
+            var $row = $(this).closest('.item');
+            var id   = $row.data('id');
+            var type = $row.data('type');
+            var name = $row.find('.name').text();
+
+            if (type === 'file') {
+                // ========== ① 文件：直接删，无确认 ==========
+                deleteFile(id);
+            } else if (type === 'folder') {
+                // ========== ② 文件夹：弹模态框选方式 ==========
+                pendingFolderId = id;
+                chosenFolderMode = '';
+                $('#folderName').text(name);
+                $('.mode').removeClass('chosen');
+                $('#folderMask').css('display', 'flex');
+            }
+        });
+
+        // ===== 文件直接删除（无声动画）=====
+        function deleteFile(id) {
+            var node = getNode(id);
+            var $row = $('.item[data-id="' + id + '"]');
+            $row.addClass('removing').fadeOut(300, function () {
+                tree = tree.filter(function (n) { return n.id !== id; });
+                render();
+                goneCount++;
+                $('#goneCount').text(goneCount);
+                console.log('【文件直接删除】' + node.name);
+            });
+        }
+
+        // ===== 文件夹模态框：选择方式 =====
+        $('.mode').on('click', function () {
+            chosenFolderMode = $(this).data('mode');
+            $('.mode').removeClass('chosen');
+            $(this).addClass('chosen');
+        });
+
+        $('#folderCancel').on('click', function () { closeFolderMask(); });
+        $('#folderConfirm').on('click', function () {
+            if (!chosenFolderMode) { alert('请先选择删除方式'); return; }
+            closeFolderMask();
+            deleteFolder(pendingFolderId, chosenFolderMode);
+        });
+
+        function closeFolderMask() {
+            $('#folderMask').hide();
+            pendingFolderId = null;
+            chosenFolderMode = '';
+        }
+
+        // ===== 文件夹删除（递归）=====
+        function deleteFolder(id, mode) {
+            var node = getNode(id);
+            var ids = collectIds(id);
+
+            if (mode === 'direct') {
+                // 直接删除：递归收集所有后代，一次性 fadeOut + 移除
+                $.each(ids, function (i, xid) {
+                    $('.item[data-id="' + xid + '"]').addClass('removing');
+                });
+                $('.removing').fadeOut(350, function () {
+                    tree = tree.filter(function (n) { return ids.indexOf(n.id) === -1; });
+                    render();
+                    goneCount += ids.length;
+                    $('#goneCount').text(goneCount);
+                    console.log('【文件夹直接删除】' + node.name + '（含 ' + ids.length + ' 项）');
+                });
+
+            } else if (mode === 'recycle') {
+                // 移到回收站：把每个后代都改造成"恢复"按钮
+                $.each(ids, function (i, xid) {
+                    var $row = $('.item[data-id="' + xid + '"]');
+                    if ($row.length === 0) return;
+                    var $clone = $row.clone();
+                    $clone.find('.btn-del')
+                        .removeClass('btn-del').addClass('btn-restore')
+                        .text('恢复').css('opacity', 1);
+                    $row.remove();
+                    $('#trashBody').prepend($clone);
+                });
+                tree = tree.filter(function (n) { return ids.indexOf(n.id) === -1; });
+                render();
+                $('#trash').removeClass('collapsed');
+                updateCount();
+                console.log('【文件夹移到回收站】' + node.name + '（含 ' + ids.length + ' 项）');
+            }
+        }
+
+        // ====================================================================
+        // ③ 删除整个项目：必须输入密码
+        // ====================================================================
+        $('#deleteProject').on('click', function () {
+            $('#projectPwd').val('').next('.hint').removeClass('err').text('演示密码：1234');
+            $('#projectMask').css('display', 'flex');
+            setTimeout(function () { $('#projectPwd').focus(); }, 100);
+        });
+
+        $('#projectCancel').on('click', function () { $('#projectMask').hide(); });
+
+        $('#projectConfirm').on('click', function () {
+            var pwd = $('#projectPwd').val();
+            if (pwd !== '1234') {
+                $('#projectPwd').next('.hint').addClass('err').text('密码错误！');
+                $('#projectPwd').val('').focus();
+                return;
+            }
+            $('#projectMask').hide();
+            deleteProject();
+        });
+
+        // 回车也能提交
+        $('#projectPwd').on('keydown', function (e) {
+            if (e.key === 'Enter') $('#projectConfirm').trigger('click');
+        });
+
+        function deleteProject() {
+            var total = tree.length;
+            // 把所有行加 removing 类，然后整体淡出
+            $('.tree .item').addClass('removing');
+            $('.removing').fadeOut(400, function () {
+                tree = [];                          // 清空数组
+                goneCount += total;
+                $('#goneCount').text(goneCount);
+                render();                           // 重新渲染（显示空状态）
+                console.log('【密码删除整个项目】共 ' + total + ' 项');
+                alert('项目已删除！');
+            });
+        }
+
+        // ===== 回收站：恢复 =====
+        $('#trashBody').on('click', '.btn-restore', function () {
+            var $row = $(this).closest('.item');
+            var id   = $row.data('id');
+            var pid  = $row.data('pid') || 0;
+            var type = $row.data('type');
+            var name = $row.find('.name').text();
+            var meta = $row.find('.meta').text();
+
+            // 加回数组（保留父子关系）
+            tree.push({ id: id, pid: pid, type: type, name: name, meta: meta });
+            tree.sort(function (a, b) { return a.id - b.id; });
+
+            $row.fadeOut(150, function () { $(this).remove(); updateCount(); });
+            render();
+            console.log('【恢复】' + name);
+        });
+
+        // ===== 回收站折叠 =====
+        $('.trash-head').on('click', function () {
+            $('#trash').toggleClass('collapsed');
+        });
+
+        // ===== 辅助 =====
+        function getNode(id) {
+            var found = null;
+            $.each(tree, function (i, n) { if (n.id === id) found = n; });
+            return found;
+        }
+
+        function collectIds(id) {
+            var ids = [id];
+            function loop(parentId) {
+                $.each(tree, function (i, n) {
+                    if (n.pid === parentId) {
+                        ids.push(n.id);
+                        if (n.type === 'folder') loop(n.id);
+                    }
+                });
+            }
+            loop(id);
+            return ids;
+        }
+    </script>
+</body>
+
+</html>

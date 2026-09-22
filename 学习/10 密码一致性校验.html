@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>密码一致性校验 - change + input 事件</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            background: #f5f6fa;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .box {
+            width: 380px;
+            padding: 30px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,.08);
+        }
+        h3 { margin-bottom: 20px; color: #333; font-size: 18px; }
+
+        .field { margin-bottom: 14px; position: relative; }
+        .field label { display: block; font-size: 13px; color: #666; margin-bottom: 6px; }
+        .field input {
+            width: 100%; padding: 10px 12px;
+            border: 1px solid #ddd; border-radius: 6px;
+            font-size: 14px; transition: border-color .15s;
+        }
+        .field input:focus { outline: none; border-color: #1d6fea; }
+
+        /* 输入框右侧状态图标 */
+        .status {
+            position: absolute; right: 12px; top: 36px;
+            font-size: 16px; font-weight: bold;
+        }
+        .ok  { color: #27ae60; }
+        .err { color: #e74c3c; }
+
+        /* 强度条 */
+        .strength { height: 4px; background: #eee; border-radius: 2px;
+                    margin-top: 6px; overflow: hidden; }
+        .strength-bar { height: 100%; width: 0; transition: width .25s, background .25s; }
+
+        /* 规则清单 */
+        .rules { list-style: none; margin: 12px 0; font-size: 13px; }
+        .rules li { padding: 3px 0; color: #999; }
+        .rules li.pass { color: #27ae60; }
+        .rules li.fail { color: #e74c3c; }
+        .rules li::before { content: "○ "; }
+        .rules li.pass::before { content: "✓ "; }
+        .rules li.fail::before { content: "✗ "; }
+
+        .tip {
+            font-size: 12px; color: #999;
+            margin-top: 10px; line-height: 1.6;
+        }
+        .tip b { color: #1d6fea; }
+    </style>
+</head>
+<script src="jQuery.min.js"></script>
+
+<body>
+    <div class="box">
+        <h3>密码重置</h3>
+
+        <div class="field">
+            <label>设置密码</label>
+            <input type="password" id="pwd" placeholder="请输入密码">
+            <span class="status" id="pwdStatus"></span>
+            <div class="strength"><div class="strength-bar" id="bar"></div></div>
+        </div>
+
+        <div class="field">
+            <label>确认密码</label>
+            <input type="password" id="pwd2" placeholder="再次输入密码">
+            <span class="status" id="pwd2Status"></span>
+        </div>
+
+        <ul class="rules" id="rules">
+            <li data-rule="len">长度 6 ~ 16 位</li>
+            <li data-rule="num">包含数字</li>
+            <li data-rule="up">包含大写字母</li>
+            <li data-rule="sp">包含特殊字符</li>
+        </ul>
+
+        <p class="tip">
+            提示：用 <b>.on('input change', fn)</b> 同时监听<b>实时输入</b>和<b>失焦</b>两个事件。
+        </p>
+    </div>
+
+    <script>
+        var $pwd  = $('#pwd');
+        var $pwd2 = $('#pwd2');
+        var $bar  = $('#bar');
+
+        // ===== 用 .on() 同时绑两个事件 =====
+        // change：失焦或回车时才触发（少次）
+        // input ：每次按键都触发（实时）
+        $pwd.on('input change', checkPwd);
+        $pwd2.on('input change', function () {
+            if ($pwd2.val() === '') {
+                $('#pwd2Status').text('');
+                return;
+            }
+            if ($pwd.val() === $pwd2.val()) {
+                $('#pwd2Status').text('✓').removeClass('err').addClass('ok');
+            } else {
+                $('#pwd2Status').text('✗').removeClass('ok').addClass('err');
+            }
+        });
+
+        function checkPwd() {
+            var v = $pwd.val();
+            var score = 0;
+
+            $('#rules li').removeClass('pass fail');
+
+            if (v.length >= 6 && v.length <= 16) {
+                $('#rules li[data-rule="len"]').addClass('pass'); score++;
+            } else {
+                $('#rules li[data-rule="len"]').addClass('fail');
+            }
+            if (/\d/.test(v)) {
+                $('#rules li[data-rule="num"]').addClass('pass'); score++;
+            } else {
+                $('#rules li[data-rule="num"]').addClass('fail');
+            }
+            if (/[A-Z]/.test(v)) {
+                $('#rules li[data-rule="up"]').addClass('pass'); score++;
+            } else {
+                $('#rules li[data-rule="up"]').addClass('fail');
+            }
+            if (/[!@#$%^&*]/.test(v)) {
+                $('#rules li[data-rule="sp"]').addClass('pass'); score++;
+            } else {
+                $('#rules li[data-rule="sp"]').addClass('fail');
+            }
+
+            var colors = ['#eee', '#e74c3c', '#f39c12', '#f1c40f', '#27ae60'];
+            $bar.css({
+                width: (score * 25) + '%',
+                background: colors[score]
+            });
+
+            if (v === '') {
+                $('#pwdStatus').text('');
+            } else if (score === 4) {
+                $('#pwdStatus').text('✓').removeClass('err').addClass('ok');
+            } else {
+                $('#pwdStatus').text('弱').removeClass('ok').addClass('err');
+            }
+
+            // 联动：如果确认框已填，立刻再校验一次
+            $pwd2.trigger('input');
+        }
+    </script>
+</body>
+
+</html>

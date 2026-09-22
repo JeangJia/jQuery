@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>删除应用场景 - 三种删除方式</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container { max-width: 720px; margin: 0 auto; }
+
+        h2 { color: #333; margin-bottom: 12px; }
+
+        .toolbar {
+            display: flex; gap: 12px; padding: 10px 16px;
+            background: #fff; border-radius: 8px; margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.04);
+            font-size: 13px; color: #666;
+        }
+        .toolbar b { color: #1d6fea; font-size: 16px; }
+
+        /* ---------- 应用列表 ---------- */
+        .apps {
+            background: #fff; border-radius: 8px; padding: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.04);
+        }
+        .app {
+            display: flex; align-items: center;
+            padding: 14px 16px; border-bottom: 1px solid #f0f0f0;
+            transition: background .15s;
+        }
+        .app:last-child { border-bottom: none; }
+        .app:hover { background: #fafbfc; }
+        .app.removing { background: #ffe9e8; }
+
+        .icon {
+            width: 44px; height: 44px; border-radius: 10px;
+            background: linear-gradient(135deg, #1d6fea, #5b9bff);
+            color: #fff; font-size: 22px;
+            display: flex; align-items: center; justify-content: center;
+            margin-right: 14px; font-weight: bold;
+        }
+
+        .info { flex: 1; }
+        .info .name { font-size: 15px; color: #333; }
+        .info .meta { font-size: 12px; color: #999; margin-top: 2px; }
+
+        .actions { display: flex; gap: 8px; }
+        .btn {
+            padding: 6px 14px; border: none; border-radius: 4px;
+            cursor: pointer; font-size: 13px; transition: all .15s;
+        }
+        .btn-del    { background: #fff; color: #e74c3c; border: 1px solid #fbd2cf; }
+        .btn-del:hover { background: #e74c3c; color: #fff; }
+        .btn-restore{ background: #fff; color: #27ae60; border: 1px solid #c9e8d2; }
+        .btn-restore:hover { background: #27ae60; color: #fff; }
+
+        /* ---------- 回收站 ---------- */
+        .trash {
+            margin-top: 20px; background: #fff; border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.04); overflow: hidden;
+        }
+        .trash-head {
+            padding: 14px 16px; background: #fafafa;
+            border-bottom: 1px solid #eee;
+            font-size: 14px; color: #666; cursor: pointer;
+            user-select: none;
+        }
+        .trash-head:hover { background: #f0f0f0; }
+        .trash-head::before { content: "🗑 "; }
+        .trash-body { padding: 4px 0; }
+        .trash.collapsed .trash-body { display: none; }
+
+        .trash .app { background: #fafbfc; opacity: .85; }
+
+        .empty {
+            padding: 30px; text-align: center; color: #999; font-size: 13px;
+        }
+
+        /* ---------- 模态框 ---------- */
+        .modal-mask {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,.4); z-index: 10;
+            justify-content: center; align-items: center;
+        }
+        .modal {
+            width: 360px; background: #fff; border-radius: 10px;
+            padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,.15);
+            animation: zoom .2s;
+        }
+        @keyframes zoom {
+            from { transform: scale(.85); opacity: 0; }
+            to   { transform: scale(1);  opacity: 1; }
+        }
+        .modal h3 { margin-bottom: 14px; color: #333; font-size: 17px; }
+        .modal p  { color: #666; font-size: 13px; margin-bottom: 14px; }
+
+        .modes { display: flex; flex-direction: column; gap: 8px; }
+        .mode {
+            padding: 12px; border: 1px solid #eee; border-radius: 6px;
+            cursor: pointer; transition: all .15s;
+        }
+        .mode:hover { border-color: #1d6fea; background: #f5f9ff; }
+        .mode strong { color: #1d6fea; display: block; margin-bottom: 2px; }
+        .mode small  { color: #888; font-size: 12px; }
+
+        .pwd-area { display: none; margin-top: 12px; }
+        .pwd-area input {
+            width: 100%; padding: 10px; border: 1px solid #ddd;
+            border-radius: 6px; font-size: 14px;
+        }
+        .pwd-area input:focus { outline: none; border-color: #1d6fea; }
+        .pwd-area .hint { font-size: 12px; color: #999; margin-top: 6px; }
+        .pwd-area .err  { color: #e74c3c; }
+
+        .modal-btns { margin-top: 16px; text-align: right; }
+        .modal-btns .btn-cancel { background: #f5f5f5; color: #666; }
+        .modal-btns .btn-cancel:hover { background: #e5e5e5; }
+        .modal-btns .btn-confirm { background: #e74c3c; color: #fff; }
+        .modal-btns .btn-confirm:hover { background: #c0392b; }
+    </style>
+</head>
+<script src="jQuery.min.js"></script>
+
+<body>
+    <div class="container">
+        <h2>📱 我的应用</h2>
+
+        <div class="toolbar">
+            <span>已安装 <b id="totalCount">0</b> 个</span>
+            <span>回收站 <b id="trashCount">0</b> 个</span>
+            <span>永久删除 <b id="goneCount">0</b> 次</span>
+        </div>
+
+        <div class="apps" id="apps">
+            <!-- 应用列表由 JS 渲染 -->
+        </div>
+
+        <div class="trash collapsed" id="trash">
+            <div class="trash-head">回收站</div>
+            <div class="trash-body" id="trashBody"></div>
+        </div>
+    </div>
+
+    <!-- 删除模态框 -->
+    <div class="modal-mask" id="mask">
+        <div class="modal">
+            <h3>删除应用</h3>
+            <p>「<span id="targetName"></span>」请选择删除方式：</p>
+
+            <div class="modes">
+                <div class="mode" data-mode="direct">
+                    <strong>直接删除</strong>
+                    <small>立即从设备移除，不可恢复</small>
+                </div>
+                <div class="mode" data-mode="recycle">
+                    <strong>移到回收站</strong>
+                    <small>暂存 30 天，可随时恢复</small>
+                </div>
+                <div class="mode" data-mode="password">
+                    <strong>密码删除</strong>
+                    <small>需要输入密码确认（演示密码：1234）</small>
+                </div>
+            </div>
+
+            <div class="pwd-area" id="pwdArea">
+                <input type="password" id="pwdInput" placeholder="请输入密码">
+                <p class="hint">提示密码：1234</p>
+            </div>
+
+            <div class="modal-btns">
+                <button class="btn btn-cancel" id="btnCancel">取消</button>
+                <button class="btn btn-confirm" id="btnConfirm">确定删除</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== 数据 =====
+        var apps = [
+            { id: 1, name: '微信',  meta: '社交通讯 · 256MB' },
+            { id: 2, name: '淘宝',  meta: '购物 · 1.2GB' },
+            { id: 3, name: '抖音',  meta: '短视频 · 890MB' },
+            { id: 4, name: '支付宝', meta: '支付 · 410MB' },
+            { id: 5, name: '高德地图', meta: '出行 · 320MB' },
+            { id: 6, name: '网易云音乐', meta: '音乐 · 540MB' }
+        ];
+        var goneCount = 0;
+        var pendingDeleteId = null;   // 等待删除的应用 id
+        var chosenMode = '';          // 用户选的删除方式
+
+        // ===== 渲染应用列表 =====
+        function renderApps() {
+            var html = '';
+            $.each(apps, function (i, app) {
+                html += '<div class="app" data-id="' + app.id + '">'
+                      +     '<div class="icon">' + app.name.charAt(0) + '</div>'
+                      +     '<div class="info">'
+                      +         '<div class="name">' + app.name + '</div>'
+                      +         '<div class="meta">' + app.meta + '</div>'
+                      +     '</div>'
+                      +     '<div class="actions">'
+                      +         '<button class="btn btn-del">删除</button>'
+                      +     '</div>'
+                      + '</div>';
+            });
+            $('#apps').html(html);
+            updateCount();
+        }
+        renderApps();
+
+        function updateCount() {
+            $('#totalCount').text(apps.length);
+            $('#trashCount').text($('#trashBody .app').length);
+        }
+
+        // ===== 1. 打开删除模态框（事件委托）=====
+        $('#apps').on('click', '.btn-del', function () {
+            pendingDeleteId = $(this).closest('.app').data('id');
+            var app = getApp(pendingDeleteId);
+            $('#targetName').text(app.name);
+            chosenMode = '';
+            $('.mode').css('border-color', '#eee');           // 重置选中样式
+            $('#pwdArea').hide();
+            $('#pwdInput').val('');
+            $('#mask').css('display', 'flex');
+        });
+
+        // ===== 2. 选择删除方式 =====
+        $('.mode').on('click', function () {
+            chosenMode = $(this).data('mode');
+            $('.mode').css('border-color', '#eee');
+            $(this).css('border-color', '#1d6fea');
+
+            // 密码删除要展开密码输入框
+            if (chosenMode === 'password') {
+                $('#pwdArea').show();
+                $('#pwdInput').focus();
+            } else {
+                $('#pwdArea').hide();
+            }
+        });
+
+        // ===== 3. 确定 / 取消 =====
+        $('#btnCancel').on('click', function () { closeModal(); });
+
+        $('#btnConfirm').on('click', function () {
+            if (!chosenMode) { alert('请先选择一种删除方式'); return; }
+
+            // 密码删除：先校验
+            if (chosenMode === 'password' && $('#pwdInput').val() !== '1234') {
+                $('#pwdInput').next('.hint').addClass('err').text('密码错误！');
+                $('#pwdInput').val('').focus();
+                return;
+            }
+
+            closeModal();
+            doDelete(pendingDeleteId, chosenMode);
+        });
+
+        function closeModal() {
+            $('#mask').hide();
+            pendingDeleteId = null;
+            chosenMode = '';
+        }
+
+        // ===== 4. 三种删除方式的核心 =====
+        function doDelete(id, mode) {
+            var $app = $('.app[data-id="' + id + '"]');
+            var app = getApp(id);
+
+            if (mode === 'direct') {
+                // ① 直接删除：从数组移除 + 动画淡出 + 移除 DOM
+                apps = apps.filter(function (a) { return a.id !== id; });
+                $app.addClass('removing');
+                $app.fadeOut(400, function () {
+                    $(this).remove();
+                    updateCount();
+                });
+                goneCount++;
+                $('#goneCount').text(goneCount);
+                console.log('【直接删除】' + app.name);
+
+            } else if (mode === 'recycle') {
+                // ② 移到回收站：从数组移除，DOM 暂留（动画后再删）
+                apps = apps.filter(function (a) { return a.id !== id; });
+                $app.slideUp(400, function () {
+                    // 改造成回收站里的样子：换"恢复"按钮
+                    var $clone = $(this).clone();
+                    $clone.find('.btn-del')
+                        .removeClass('btn-del').addClass('btn-restore')
+                        .text('恢复');
+                    $clone.css({ opacity: .85, background: '#fafbfc' });
+                    $(this).remove();
+                    // 放到回收站头部
+                    $('#trashBody').prepend($clone);
+                    updateCount();
+                    // 自动展开回收站
+                    $('#trash').removeClass('collapsed');
+                });
+                console.log('【移到回收站】' + app.name);
+
+            } else if (mode === 'password') {
+                // ③ 密码删除：动画 + 移除 + 计数（相当于直接删除）
+                $app.addClass('removing');
+                apps = apps.filter(function (a) { return a.id !== id; });
+                $app.fadeOut(400, function () {
+                    $(this).remove();
+                    updateCount();
+                });
+                goneCount++;
+                $('#goneCount').text(goneCount);
+                console.log('【密码删除】' + app.name);
+            }
+        }
+
+        // ===== 5. 恢复（回收站的事件委托）=====
+        $('#trashBody').on('click', '.btn-restore', function () {
+            var id = $(this).closest('.app').data('id');
+            var app = getApp(id);
+            if (!app) { $(this).closest('.app').remove(); return; }
+
+            // 加回 apps 数组
+            apps.push(app);
+            // 排序按 id 升序（保持原顺序感）
+            apps.sort(function (a, b) { return a.id - b.id; });
+
+            // 隐藏模态中的那行
+            $(this).closest('.app').fadeOut(200, function () { $(this).remove(); });
+
+            // 重新渲染应用列表（最简单可靠）
+            renderApps();
+            console.log('【恢复】' + app.name);
+        });
+
+        // ===== 6. 回收站折叠 =====
+        $('.trash-head').on('click', function () {
+            $('#trash').toggleClass('collapsed');
+        });
+
+        // ===== 辅助：根据 id 取应用对象 =====
+        function getApp(id) {
+            var found = null;
+            $.each(apps, function (i, a) { if (a.id === id) found = a; });
+            return found;
+        }
+    </script>
+</body>
+
+</html>

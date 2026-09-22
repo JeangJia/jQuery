@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星级评分 - index() + siblings() + each()</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        .rating {
+            width: 320px;
+            margin: 150px auto;
+            text-align: center;
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+
+        .stars {
+            font-size: 40px;
+            cursor: pointer;
+            user-select: none;
+            /* 防止双击选中文字 */
+        }
+
+        .star {
+            color: #ddd;
+            transition: color .1s, transform .1s;
+        }
+
+        .star.on {
+            color: #f5a623;
+        }
+
+        .star:hover {
+            transform: scale(1.2);
+        }
+
+        .text {
+            margin-top: 16px;
+            font-size: 18px;
+            color: #666;
+        }
+
+        .text strong {
+            color: #e1251b;
+        }
+    </style>
+</head>
+<script src="jQuery.min.js"></script>
+
+<body>
+    <div class="rating">
+        <div class="stars">
+            <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span
+                class="star">★</span>
+        </div>
+        <p class="text">请给本店打分（<strong>0</strong> 分）</p>
+    </div>
+    <script>
+        var texts = ['非常差', '较差', '一般', '满意', '非常满意'];
+        var result = 0; // 记录最终确认的分数
+
+        // mouseover：从第 1 颗星一路亮到鼠标所在的这颗
+        // 思路：index() 拿到当前是第几颗，再用 each() 遍历所有星星：
+        //       索引 <= 当前索引的点亮，否则熄灭
+        $('.star').mouseover(function () {
+            var idx = $(this).index();
+            lightTo(idx);
+        });
+
+        // mouseout：鼠标离开时恢复成"已确认"的分数
+        $('.stars').mouseleave(function () {
+            lightTo(result - 1);
+        });
+
+        // click：点击确认分数
+        $('.star').click(function () {
+            result = $(this).index() + 1;
+            $('.text').html('你打了 <strong>' + texts[result - 1] + '</strong>（' + result + ' 分）');
+        });
+
+        // 亮到第 n 颗（n 从 0 开始，-1 表示全灭）
+        function lightTo(n) {
+            $('.star').each(function (i) {
+                // each 的回调参数 i 就是当前元素的索引，和 index() 结果一致
+                if (i <= n) {
+                    $(this).addClass('on');
+                } else {
+                    $(this).removeClass('on');
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

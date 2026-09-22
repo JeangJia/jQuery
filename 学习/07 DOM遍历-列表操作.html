@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>列表操作 - DOM 方法家族</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; padding: 20px; background: #fafafa; }
+
+        .container { max-width: 600px; margin: 0 auto; }
+
+        button {
+            padding: 6px 14px; margin: 4px; border: none; background: #1d6fea;
+            color: #fff; border-radius: 4px; cursor: pointer; font-size: 13px;
+        }
+        button:hover { background: #0d5ed8; }
+
+        ul.list {
+            list-style: none; background: #fff; padding: 10px;
+            border-radius: 6px; margin-top: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.06);
+        }
+        ul.list li {
+            padding: 10px 14px; margin: 4px 0; background: #f3f3f3;
+            border-radius: 4px; cursor: pointer; transition: background .15s;
+        }
+        ul.list li:hover { background: #ffeed0; }
+
+        /* 不同方法高亮不同颜色 */
+        .hl-eq     { background: #d6e8ff !important; color: #1d6fea; }
+        .hl-first  { background: #ffe9b8 !important; color: #b8810a; }
+        .hl-last   { background: #ffd5d5 !important; color: #c0392b; }
+        .hl-prev   { background: #d4f1d4 !important; color: #1e8449; }
+        .hl-next   { background: #e0d4f1 !important; color: #6c3483; }
+        .hl-even   { background: #cfe9f7 !important; }
+        .hl-odd    { background: #f7cfe9 !important; }
+    </style>
+</head>
+<script src="jQuery.min.js"></script>
+
+<body>
+    <div class="container">
+        <h3>点击按钮观察 DOM 方法的筛选效果</h3>
+        <div>
+            <button id="btnFirst">.first()</button>
+            <button id="btnLast">.last()</button>
+            <button id="btnEq">.eq(2)</button>
+            <button id="btnPrev">.prev()</button>
+            <button id="btnNext">.next()</button>
+            <button id="btnEven">:even</button>
+            <button id="btnOdd">:odd</button>
+            <button id="btnReset">清除</button>
+        </div>
+        <ul class="list" id="list">
+            <li>第 1 项 - jQuery</li>
+            <li>第 2 项 - JavaScript</li>
+            <li>第 3 项 - HTML</li>
+            <li>第 4 项 - CSS</li>
+            <li>第 5 项 - Vue</li>
+            <li>第 6 项 - React</li>
+        </ul>
+        <p id="info" style="margin-top:10px;color:#666;">提示：先点击列表中的某一项作为"基准"，再点上方按钮。</p>
+    </div>
+
+    <script>
+        var $li = $('#list li');
+        var $base = $li.eq(0); // 默认基准是第 1 项
+        var lastClass = '';
+
+        // 选中基准（点击 li 时）
+        $li.click(function () {
+            clear();
+            $base = $(this);
+            $(this).css('outline', '2px solid #1d6fea');
+            $('#info').html('基准已设为：<b>' + $(this).text() + '</b>');
+        });
+
+        function clear() {
+            $li.removeAttr('style').removeClass(lastClass);
+            lastClass = '';
+        }
+        function mark(cls) {
+            clear();
+            lastClass = cls;
+            $li.addClass(cls);
+        }
+
+        // --- 各种 DOM 方法 ---
+        $('#btnFirst').click(function () { mark('hl-first');  $('#info').text('.first() → 第 1 个元素'); });
+        $('#btnLast').click(function () {  mark('hl-last');   $('#info').text('.last()  → 最后 1 个元素'); });
+        $('#btnEq').click(function () {    mark('hl-eq');     $('#info').text('.eq(2)   → 索引为 2 的元素（第3个）'); });
+
+        // prev()/next() 必须基于选中的基准
+        $('#btnPrev').click(function () {
+            clear();
+            $base.prev().addClass('hl-prev');
+            $('#info').html('.prev() → "' + $base.text() + '" 的<strong>上一个兄弟</strong>');
+            lastClass = 'hl-prev';
+        });
+        $('#btnNext').click(function () {
+            clear();
+            $base.next().addClass('hl-next');
+            $('#info').html('.next() → "' + $base.text() + '" 的<strong>下一个兄弟</strong>');
+            lastClass = 'hl-next';
+        });
+
+        // :even / :odd 是 jQuery 的索引选择器（从 0 开始）
+        $('#btnEven').click(function () { mark('hl-even'); $('#info').text(':even → 索引 0,2,4...（偶数位）'); });
+        $('#btnOdd').click(function () {  mark('hl-odd');  $('#info').text(':odd  → 索引 1,3,5...（奇数位）'); });
+
+        $('#btnReset').click(function () { clear(); $('#info').text('已清除'); });
+    </script>
+</body>
+</html>

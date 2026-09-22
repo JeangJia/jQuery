@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手风琴 - length + :eq + each() + siblings()</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        .accordion {
+            width: 300px;
+            margin: 80px auto;
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+
+        .group h3 {
+            height: 44px;
+            line-height: 44px;
+            padding-left: 16px;
+            background: #333;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        .group ul {
+            display: none;
+            list-style: none;
+        }
+
+        .group ul li {
+            height: 36px;
+            line-height: 36px;
+            padding-left: 32px;
+            background: #f4f4f4;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+        }
+
+        .group ul li:hover {
+            background: #ffe9e8;
+        }
+
+        .info {
+            margin-top: 16px;
+            padding: 10px;
+            background: #eef;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<script src="jQuery.min.js"></script>
+
+<body>
+    <div class="accordion">
+        <div class="group">
+            <h3>前端开发</h3>
+            <ul>
+                <li>HTML</li>
+                <li>CSS</li>
+                <li>JavaScript</li>
+                <li>jQuery</li>
+            </ul>
+        </div>
+        <div class="group">
+            <h3>后端开发</h3>
+            <ul>
+                <li>Node.js</li>
+                <li>Java</li>
+                <li>Python</li>
+            </ul>
+        </div>
+        <div class="group">
+            <h3>数据库</h3>
+            <ul>
+                <li>MySQL</li>
+                <li>Redis</li>
+            </ul>
+        </div>
+        <p class="info">共 <b class="count">0</b> 组菜单，累计点击 <b class="clicks">0</b> 次</p>
+    </div>
+    <script>
+        var totalClicks = 0;
+
+        // 1. 点击标题：展开自己的 ul，收起"兄弟分组"的 ul（siblings 的经典用法）
+        //    end() 返回上一步的 jQuery 对象，实现链式编程
+        $('.group h3').click(function () {
+            $(this).next().stop().slideToggle()
+                .parent().siblings()
+                .children('ul').stop().slideUp();
+        });
+
+        // 2. length：统计有多少个分组
+        var count = $('.group').length;
+        $('.count').text(count);
+
+        // 3. each + length + :eq：给每个分组统计自己的选项数，写到标题后面
+        $('.group').each(function (i) {
+            var n = $(this).find('li').length; // 这个分组里有几门课
+            $(this).find('h3').append('（' + n + '）');
+        });
+
+        // 4. :eq + index：点击某个课程时，报告"第几组的第几项"
+        $('.group li').click(function () {
+            totalClicks++;
+            $('.clicks').text(totalClicks);
+
+            var groupIdx = $(this).closest('.group').index(); // 在兄弟中的位置
+            var itemIdx = $(this).index();                    // 在自己 ul 里的位置
+            console.log('你点击了第 ' + (groupIdx + 1) + ' 组的第 ' + (itemIdx + 1) + ' 项');
+
+            // 用 :eq 精准高亮对应的分组标题
+            $('.group h3').eq(groupIdx).css('color', '#e1251b')
+                .siblings('h3').addBack().css('color', '');
+            $('.group h3').eq(groupIdx).css('color', '#e1251b');
+        });
+    </script>
+</body>
+
+</html>
