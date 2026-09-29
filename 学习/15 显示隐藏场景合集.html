@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>显示隐藏场景合集 - jQuery</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            background: #f0f2f7;
+            color: #333;
+            padding: 24px 16px 60px;
+        }
+
+        .page { max-width: 1100px; margin: 0 auto; }
+        .page > h1 { font-size: 22px; margin-bottom: 6px; }
+        .page > .sub { font-size: 13px; color: #8a90a0; margin-bottom: 20px; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+            gap: 16px;
+        }
+
+        .card {
+            background: #fff; border-radius: 10px; padding: 16px;
+            box-shadow: 0 2px 10px rgba(20, 30, 60, .07);
+            display: flex; flex-direction: column;
+        }
+        .card h3 { font-size: 15px; margin-bottom: 8px; }
+        .api {
+            display: inline-block; font-family: Consolas, monospace;
+            font-size: 11px; color: #1d6fea; background: #eaf1fe;
+            padding: 2px 8px; border-radius: 10px; margin-bottom: 12px;
+            align-self: flex-start;
+        }
+        .card .body { flex: 1; }
+
+        /* 每个卡片底部的"发生了什么"日志 */
+        .log {
+            margin-top: 12px; font-family: Consolas, monospace; font-size: 12px;
+            color: #666; background: #f7f8fa; border-left: 3px solid #1d6fea;
+            padding: 8px 10px; border-radius: 0 4px 4px 0; min-height: 34px;
+            line-height: 1.5;
+        }
+        .log b { color: #1d6fea; }
+
+        button { font-family: inherit; cursor: pointer; }
+        .btn {
+            padding: 7px 14px; border: none; border-radius: 6px;
+            background: #1d6fea; color: #fff; font-size: 13px;
+        }
+        .btn:hover { background: #155ecb; }
+        .btn.ghost { background: #eef1f6; color: #555; }
+        .btn.ghost:hover { background: #e2e6ee; }
+        .btn.mini { padding: 5px 10px; font-size: 12px; }
+        .btn:disabled { background: #c8ccd4; cursor: not-allowed; }
+        .hidden { display: none; }
+
+        /* ---------- ① 高级筛选 ---------- */
+        .filter-toggle {
+            width: 100%; display: flex; justify-content: space-between;
+            align-items: center;
+        }
+        .filter-body {
+            display: none; margin-top: 12px; padding: 12px;
+            background: #f7f8fa; border-radius: 8px;
+        }
+        .field-row { display: flex; gap: 8px; margin-bottom: 8px; }
+        .field-row input, .field-row select {
+            flex: 1; padding: 7px 10px; border: 1px solid #dde1e8;
+            border-radius: 6px; font-size: 13px; font-family: inherit;
+            background: #fff;
+        }
+
+        /* ---------- ② 表单校验提示 ---------- */
+        .pw-field { margin-bottom: 10px; }
+        .pw-field label { display: block; font-size: 12px; color: #8a90a0; margin-bottom: 4px; }
+        .pw-field input {
+            width: 100%; padding: 8px 10px; border: 1px solid #dde1e8;
+            border-radius: 6px; font-size: 13px;
+        }
+        .pw-tip {
+            display: none; margin-top: 8px; font-size: 12px;
+            padding: 7px 10px; border-radius: 6px;
+        }
+        .pw-tip.err { background: #fdecea; color: #c0392b; }
+        .pw-tip.ok  { background: #eaf7ee; color: #1e8449; }
+
+        /* ---------- ③ 加载更多 ---------- */
+        .task-list { list-style: none; margin-bottom: 12px; }
+        .task-list li {
+            padding: 8px 10px; border-bottom: 1px solid #f0f2f5;
+            font-size: 13px;
+        }
+        .task-list li::before { content: "• "; color: #1d6fea; }
+
+        /* ---------- ④ Toast ---------- */
+        .toast-wrap {
+            min-height: 132px; background: #f7f8fa; border-radius: 8px;
+            padding: 10px; display: flex; flex-direction: column; gap: 8px;
+            justify-content: flex-start;
+        }
+        .toast {
+            display: flex; align-items: center; gap: 8px;
+            padding: 9px 12px; border-radius: 6px;
+            font-size: 13px; color: #fff;
+        }
+        .toast.success { background: #27ae60; }
+        .toast.warn    { background: #e67e22; }
+        .toast.error   { background: #e74c3c; }
+        .toast .close  { margin-left: auto; cursor: pointer; opacity: .7; font-size: 12px; }
+        .toast .close:hover { opacity: 1; }
+
+        /* ---------- ⑤ 空状态 ---------- */
+        .cart-list { list-style: none; }
+        .cart-list li {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 10px; font-size: 13px; border-bottom: 1px solid #f0f2f5;
+        }
+        .cart-list .del { color: #e74c3c; font-size: 12px; cursor: pointer; }
+        .cart-list .del:hover { text-decoration: underline; }
+        .empty { display: none; text-align: center; padding: 22px 10px; color: #a8aebd; font-size: 13px; }
+        .empty .icon { display: block; font-size: 28px; margin-bottom: 6px; }
+        .card-foot { margin-top: 12px; display: flex; gap: 8px; }
+
+        /* ---------- ⑥ flex 坑对比 ---------- */
+        .flex-row { display: flex; gap: 8px; margin-bottom: 10px; }
+        .flex-row .chip {
+            flex: 1; text-align: center; padding: 9px 4px;
+            background: #eaf1fe; color: #1d6fea;
+            border-radius: 6px; font-size: 12px;
+        }
+        .row-label { font-size: 12px; color: #8a90a0; margin-bottom: 6px; }
+        .hide-by-class { display: none; }
+        .note {
+            font-size: 12px; color: #8a90a0; line-height: 1.6;
+            background: #fffbe9; padding: 8px 10px; border-radius: 6px;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+        <h1>显示隐藏 · 5 个业务场景 + 1 个易错点</h1>
+        <p class="sub">同一页对照：筛选展开、校验提示、加载更多、Toast、空状态、flex 元素隐藏的正确姿势</p>
+
+        <div class="grid">
+
+            <!-- ① 高级筛选 -->
+            <div class="card">
+                <h3>① 高级筛选展开收起</h3>
+                <span class="api">slideToggle() · is(':visible')</span>
+                <div class="body">
+                    <button class="btn ghost filter-toggle" id="filterToggle">
+                        <span class="label">展开筛选</span><span class="arrow">▾</span>
+                    </button>
+                    <div class="filter-body" id="filterBody">
+                        <div class="field-row">
+                            <input type="text" placeholder="关键词">
+                            <select><option>全部状态</option><option>已发布</option><option>草稿</option></select>
+                        </div>
+                        <div class="field-row">
+                            <input type="date">
+                            <input type="date">
+                        </div>
+                    </div>
+                </div>
+                <div class="log" id="filterLog">点「展开筛选」试试</div>
+            </div>
+
+            <!-- ② 表单校验提示 -->
+            <div class="card">
+                <h3>② 表单校验的实时错误提示</h3>
+                <span class="api">slideDown() / slideUp()</span>
+                <div class="body">
+                    <form id="pwForm">
+                        <div class="pw-field">
+                            <label>设置密码</label>
+                            <input type="password" id="pw1" placeholder="输入密码">
+                        </div>
+                        <div class="pw-field">
+                            <label>确认密码</label>
+                            <input type="password" id="pw2" placeholder="再输一次">
+                        </div>
+                        <div class="pw-tip" id="pwTip"></div>
+                        <div class="card-foot">
+                            <button class="btn" type="submit" id="submitBtn" disabled>提交</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="log" id="pwLog">在第二个输入框里输入内容</div>
+            </div>
+
+            <!-- ③ 加载更多 -->
+            <div class="card">
+                <h3>③ 列表「加载更多 / 查看全部」</h3>
+                <span class="api">hide() · fadeIn() · .promise()</span>
+                <div class="body">
+                    <ul class="task-list" id="taskList">
+                        <li>① 读 jQuery 事件文档</li>
+                        <li>② 写注册页表单校验</li>
+                        <li>③ 复习事件委托</li>
+                    </ul>
+                    <div class="card-foot">
+                        <button class="btn mini" id="loadMore">查看全部（还有 3 条）</button>
+                        <button class="btn mini ghost hidden" id="resetList">收起</button>
+                    </div>
+                </div>
+                <div class="log" id="taskLog">初始只显示 3 条，其余已隐藏</div>
+            </div>
+
+            <!-- ④ Toast -->
+            <div class="card">
+                <h3>④ Toast 轻提示（自动消失）</h3>
+                <span class="api">fadeIn() / fadeOut() / 事件委托</span>
+                <div class="body">
+                    <div class="toast-wrap" id="toastWrap"></div>
+                    <div class="card-foot">
+                        <button class="btn mini" data-type="success" data-msg="保存成功">成功</button>
+                        <button class="btn mini" data-type="warn" data-msg="库存不足">警告</button>
+                        <button class="btn mini" data-type="error" data-msg="网络异常">错误</button>
+                    </div>
+                </div>
+                <div class="log" id="toastLog">点按钮生成 toast，2.2 秒后自动淡出</div>
+            </div>
+
+            <!-- ⑤ 空状态 -->
+            <div class="card">
+                <h3>⑤ 空状态与列表互斥显示</h3>
+                <span class="api">.length · fadeIn() / fadeOut()</span>
+                <div class="body">
+                    <ul class="cart-list" id="cartList"></ul>
+                    <div class="empty" id="cartEmpty">
+                        <span class="icon">🛒</span>
+                        购物车还是空的，去挑点东西吧
+                    </div>
+                    <div class="card-foot">
+                        <button class="btn mini" id="addItem">加一件商品</button>
+                    </div>
+                </div>
+                <div class="log" id="cartLog"></div>
+            </div>
+
+            <!-- ⑥ flex 元素隐藏的坑 -->
+            <div class="card">
+                <h3>⑥ 易错点：给 flex 元素用 hide()</h3>
+                <span class="api">hide()/show() vs toggleClass()</span>
+                <div class="body">
+                    <p class="row-label">A 组：用 hide() / show()</p>
+                    <div class="flex-row" id="flexA">
+                        <span class="chip">左</span>
+                        <span class="chip">中</span>
+                        <span class="chip">右</span>
+                    </div>
+                    <button class="btn mini ghost" id="flexAToggle">隐藏 / 显示 A 组</button>
+
+                    <p class="row-label" style="margin-top:14px;">B 组：用 toggleClass()</p>
+                    <div class="flex-row" id="flexB">
+                        <span class="chip">左</span>
+                        <span class="chip">中</span>
+                        <span class="chip">右</span>
+                    </div>
+                    <button class="btn mini ghost" id="flexBToggle">隐藏 / 显示 B 组</button>
+
+                    <div class="note">
+                        A 组的两行代码：<br>
+                        <code>$box.hide()</code> → 隐藏<br>
+                        <code>$box.show()</code> → 恢复<br>
+                        点一下按钮看下面的 display 值变化。<br>
+                        <code>display:flex</code> 写在 CSS 类里，<code>show()</code> 只会把它恢复成标签默认的 <code>block</code>。
+                    </div>
+                </div>
+                <div class="log" id="flexLog">点按钮对比两组的 display 值</div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="jQuery.min.js"></script>
+    <script>
+        /* 统一的小日志工具：把"发生了什么"打到卡片底部 */
+        function log(sel, html) {
+            $(sel).html(html);
+        }
+
+        /* ============================================================
+           ① 高级筛选：slideToggle + is(':visible') 判断当前状态
+           ============================================================ */
+        $('#filterToggle').on('click', function () {
+            var $btn = $(this);
+
+            // stop(true, true)：连点时先停掉动画队列并跳到终点，
+            // 否则快速连点会让面板"抽搐"（动画排队叠加）
+            $('#filterBody').stop(true, true).slideToggle(200, function () {
+                // 回调在动画结束后执行，这时 is(':visible') 才是稳定的结果
+                var open = $(this).is(':visible');
+                $btn.find('.label').text(open ? '收起筛选' : '展开筛选');
+                $btn.find('.arrow').text(open ? '▴' : '▾');
+                log('#filterLog',
+                    '面板：<b>' + (open ? '可见' : '隐藏') + '</b>' +
+                    ' · is(":visible") = <b>' + open + '</b>');
+            });
+        });
+
+        /* ============================================================
+           ② 表单校验：错误提示属于"状态互斥"，该显示就显示、该藏就藏
+           ============================================================ */
+        function checkPwd() {
+            var v1 = $('#pw1').val();
+            var v2 = $('#pw2').val();
+            var $tip = $('#pwTip');
+
+            if (v2 === '') {
+                // 还没开始输入，不打扰用户
+                $tip.stop(true, true).slideUp(150);
+                $('#submitBtn').prop('disabled', true);
+                log('#pwLog', '确认框为空 → 提示收起，提交按钮 <b>disabled</b>');
+                return;
+            }
+
+            var same = (v1 === v2);
+            $tip.removeClass('ok err')
+                .addClass(same ? 'ok' : 'err')
+                .html(same ? '✓ 两次密码一致' : '✗ 两次密码不一致')
+                .stop(true, true).slideDown(150);
+
+            // 按钮的可用状态也是一个"隐藏/显示"的决策点
+            $('#submitBtn').prop('disabled', !same);
+            log('#pwLog', '两次密码' + (same ? '<b>一致</b>' : '<b>不一致</b>') +
+                ' → 提示 slideDown，按钮 ' + (same ? 'enabled' : 'disabled'));
+        }
+
+        // 用 input 事件做实时反馈（change 只在失焦时触发，体验滞后）
+        $('#pw1, #pw2').on('input', checkPwd);
+
+        $('#pwForm').on('submit', function (e) {
+            e.preventDefault();   // 阻止表单真的跳转
+            log('#pwLog', '<b>提交成功</b>（e.preventDefault() 拦住了默认跳转）');
+        });
+
+        /* ============================================================
+           ③ 加载更多：初始就渲染好，只是"隐藏"起来，点击时 fadeIn
+           ============================================================ */
+        var moreItems = ['④ 复盘本周的 demo', '⑤ 写一篇踩坑总结', '⑥ 整理成笔记'];
+
+        // 追加到列表并立刻 hide()：DOM 已经在页面上，只是不可见
+        $.each(moreItems, function (i, text) {
+            $('<li>').addClass('extra').text(text).hide().appendTo('#taskList');
+        });
+        log('#taskLog', '共 <b>' + $('#taskList li').length + '</b> 条，当前隐藏 <b>' +
+            $('#taskList li:hidden').length + '</b> 条');
+
+        $('#loadMore').on('click', function () {
+            var $btn = $(this);
+
+            // 一次 fadeIn 多个元素时，用 .promise().done() 等它们全部结束
+            // （如果写在 fadeIn 的回调里，3 个元素会执行 3 次）
+            $('.extra').stop(true, true).fadeIn(250).promise().done(function () {
+                log('#taskLog', '已展开全部 · 隐藏项 <b>' + $('#taskList li:hidden').length + '</b> 条');
+            });
+
+            $btn.fadeOut(150);                       // 按钮自己也要隐藏
+            $('#resetList').stop(true, true).fadeIn(200);
+        });
+
+        $('#resetList').on('click', function () {
+            $('.extra').hide();                      // 瞬间收起，不需要动画
+            $(this).hide();
+            $('#loadMore').stop(true, true).fadeIn(200);
+            log('#taskLog', '已收起 · 隐藏项 <b>' + $('#taskList li:hidden').length + '</b> 条');
+        });
+
+        /* ============================================================
+           ④ Toast：淡入 → 定时淡出 → 自己从 DOM 移除
+           ============================================================ */
+        function showToast(msg, type) {
+            var $toast = $('<div class="toast"></div>')
+                .addClass(type)
+                .append($('<span/>').text(msg))
+                .append('<span class="close">✕</span>')
+                .hide()
+                .appendTo('#toastWrap')
+                .stop(true, true).fadeIn(200);
+
+            // 定时器挂在元素上：手动关闭时才能 clearTimeout，避免"关了又弹"
+            var timer = setTimeout(function () {
+                $toast.fadeOut(300, function () {
+                    $(this).remove();    // 动画结束再删，防止残留空盒子
+                });
+            }, 2200);
+            $toast.data('timer', timer);
+
+            log('#toastLog', '页面上的 toast 共 <b>' + $('#toastWrap .toast').length + '</b> 个');
+        }
+
+        // 事件委托：以后动态生成的 toast，关闭按钮照样能用
+        $('#toastWrap').on('click', '.close', function () {
+            var $toast = $(this).parent();
+            clearTimeout($toast.data('timer'));
+            $toast.stop(true, true).fadeOut(200, function () {
+                $(this).remove();
+            });
+        });
+
+        $('#toastWrap').siblings('.card-foot').on('click', 'button[data-msg]', function () {
+            showToast($(this).data('msg'), $(this).data('type'));
+        });
+
+        /* ============================================================
+           ⑤ 空状态：列表和空状态永远只有一个可见
+           ============================================================ */
+        var cart = ['机械键盘', '无线鼠标', '显示器支架'];
+
+        function renderCart() {
+            var $list = $('#cartList').empty();
+
+            $.each(cart, function (i, name) {
+                $('<li>')
+                    .append($('<span/>').text(name))
+                    .append('<span class="del" data-index="' + i + '">删除</span>')
+                    .appendTo($list);
+            });
+
+            // 只判断一次"有没有数据"，两个元素按相反方向显隐
+            var hasData = $list.children().length > 0;
+
+            if (hasData) {
+                $list.stop(true, true).fadeIn(200);
+                $('#cartEmpty').stop(true, true).fadeOut(200);
+            } else {
+                $list.stop(true, true).fadeOut(200);
+                $('#cartEmpty').stop(true, true).fadeIn(200);
+            }
+
+            // 注意：这里用 hasData 判断，而不是 is(':visible')
+            // 因为 fadeOut 刚执行时元素还在动画中，is(':visible') 仍会返回 true
+            log('#cartLog', '商品 <b>' + $list.children().length + '</b> 件 · 空状态：<b>' +
+                (hasData ? '隐藏' : '显示') + '</b>');
+        }
+
+        $('#cartList').on('click', '.del', function () {
+            // data-index 是元素自带的属性，jQuery 会自动转成数字
+            cart.splice($(this).data('index'), 1);
+            renderCart();
+        });
+
+        $('#addItem').on('click', function () {
+            if (cart.length >= 4) {
+                showToast('演示上限 4 件', 'warn');
+                return;
+            }
+            cart.push('商品 ' + (cart.length + 1));
+            renderCart();
+        });
+
+        renderCart();   // 首次渲染
+
+        /* ============================================================
+           ⑥ flex 元素隐藏的坑：hide()/show() 会丢掉 display:flex
+           ============================================================ */
+        $('#flexAToggle').on('click', function () {
+            var $box = $('#flexA');
+
+            if ($box.is(':hidden')) {
+                $box.show();          // 只把 display 恢复成标签默认值
+            } else {
+                $box.hide();
+            }
+
+            var d = $box.css('display');
+            log('#flexLog', 'A 组 hide()/show() 之后 display = <b>' + d + '</b>' +
+                (d === 'flex' ? '' : ' ← flex 丢了，三个格子不再平分宽度'));
+        });
+
+        $('#flexBToggle').on('click', function () {
+            var $box = $('#flexB');
+
+            // 类名一加一减，display 由 CSS 控制，flex 不受影响
+            $box.toggleClass('hide-by-class');
+
+            log('#flexLog', 'B 组 toggleClass() 之后 display = <b>' +
+                $box.css('display') + '</b>');
+        });
+    </script>
+</body>
+
+</html>

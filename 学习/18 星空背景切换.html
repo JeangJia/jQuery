@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<!-- ============================================================
+    星空主题登录页（纯界面，不含登录逻辑）
+
+    内容：白天 / 黑夜切换 + 星空（星星随机闪烁、月亮光晕、流星）
+
+    实现要点：
+      1. 主题：CSS 变量 + <html class="night"> 切换（A1）
+      2. 星星：jQuery 循环生成 DOM，按 18×11 网格分区随机撒点（B1 + C2）
+      3. 闪烁：CSS animation，每颗星随机 duration / delay（D1）
+      4. 用「两层背景 + opacity 过渡」代替渐变过渡（渐变本身没法 transition）
+      5. 星星的 animation-delay 用【负值】，一进页面就分布在不同相位，不会同时亮
+      6. 主题存 localStorage，并在 <head> 提前贴类，避免刷新时"先白后黑"
+
+    【运行方式】浏览器直接打开（需联网加载 CDN 上的 jQuery 4.0.0）。
+    ============================================================ -->
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星空主题 · 登录页</title>
+
+    <!-- 防闪烁：页面渲染前就把 night 类贴到 <html> 上 -->
+    <script>
+        (function () {
+            try {
+                if (localStorage.getItem('theme') === 'night') {
+                    document.documentElement.className = 'night';
+                }
+            } catch (e) { }
+        })();
+    </script>
+
+    <style>
+        /* ===================== 主题变量 ===================== */
+        :root {
+            --panel: rgba(255, 255, 255, .78);
+            --border: rgba(210, 220, 238, .9);
+            --text: #2b3445;
+            --muted: #6b7688;
+            --accent: #1d6fea;
+            --shadow: 0 20px 50px rgba(24, 40, 80, .16);
+        }
+        :root.night {
+            --panel: rgba(20, 28, 50, .58);
+            --border: rgba(255, 255, 255, .14);
+            --text: #e8eefc;
+            --muted: #97a2bd;
+            --accent: #6ea8ff;
+            --shadow: 0 20px 50px rgba(0, 0, 0, .5);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { background: #eef3fb; }
+        html.night { background: #04060f; }
+
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            color: var(--text);
+            background: transparent;
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            padding: 24px;
+            transition: color .5s;
+        }
+
+        /* ===================== 两层背景（交叉过渡） ===================== */
+        #bgDay, #bgNight {
+            position: fixed; inset: 0; z-index: 0;
+            transition: opacity .8s ease;
+        }
+        #bgDay {
+            opacity: 1;
+            background: linear-gradient(160deg, #eaf1fe 0%, #dbe7fb 45%, #eef3fb 100%);
+        }
+        #bgNight {
+            opacity: 0;
+            background: radial-gradient(120% 90% at 70% 8%, #17244f 0%, #0a1128 45%, #04060f 100%);
+        }
+        :root.night #bgDay { opacity: 0; }
+        :root.night #bgNight { opacity: 1; }
+
+        /* ===================== 星空层 ===================== */
+        #sky {
+            display: none;                 /* 白天隐藏，夜里 fadeIn */
+            position: fixed; inset: 0; z-index: 1;
+            pointer-events: none;          /* 全屏装饰层，别挡鼠标 */
+        }
+        #stars, #meteors { position: absolute; inset: 0; }
+        #meteors { overflow: hidden; }
+
+        /* D1：闪烁动画。--o 是这颗星的"最亮值" */
+        .star {
+            position: absolute;
+            border-radius: 50%;
+            background: #fff;
+            animation-name: twinkle;
+            animation-iteration-count: infinite;
+            animation-timing-function: ease-in-out;
+        }
+        @keyframes twinkle {
+            0%, 100% { opacity: var(--o); }
+            50%      { opacity: .10; }
+        }
+
+        /* ✨ 三档星星：小暗星最多、大亮星最少 */
+        .lv1 { width: 2px; height: 2px; --o: .7; }          /* 约 62% */
+        .lv2 { width: 3px; height: 3px; --o: .92; }         /* 约 30% */
+        .lv3 {                                              /* 约 8% */
+            width: 4px; height: 4px; --o: 1;
+            box-shadow: 0 0 10px 2px rgba(255, 255, 255, .9);
+        }
+
+        /* 🌙 月亮 + 光晕 */
+        #moon {
+            position: absolute; right: 11%; top: 14%;
+            width: 84px; height: 84px; border-radius: 50%;
+            background: radial-gradient(circle at 34% 34%, #fffdf2, #f3e7ba 58%, #d9cb93);
+            box-shadow: 0 0 36px 10px rgba(255, 250, 210, .35),
+                        0 0 130px 46px rgba(255, 250, 210, .13);
+        }
+
+        /* 🌠 流星：概率生成，飞完就删 */
+        .meteor {
+            position: absolute; width: 150px; height: 2px;
+            border-radius: 2px;
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, .95));
+            filter: drop-shadow(0 0 6px rgba(255, 255, 255, .8));
+            animation: meteorFly 1.2s ease-in forwards;
+        }
+        @keyframes meteorFly {
+            0%   { opacity: 0; transform: translate(0, 0) rotate(160deg); }
+            15%  { opacity: 1; }
+            100% { opacity: 0; transform: translate(-360px, 130px) rotate(160deg); }
+        }
+
+        /* ===================== 主题开关（☀️ 〔开关〕 🌙） ===================== */
+        .theme-switch {
+            position: fixed; right: 22px; top: 18px; z-index: 200;
+            display: flex; align-items: center; gap: 9px;
+            padding: 7px 13px; border-radius: 22px;
+            border: 1px solid var(--border); background: var(--panel);
+            box-shadow: var(--shadow); cursor: pointer;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: background-color .6s, border-color .6s, box-shadow .6s, transform .15s;
+        }
+        .theme-switch:hover { transform: translateY(-1px); }
+
+        .theme-switch .ico {
+            font-size: 15px; line-height: 1;
+            transition: opacity .35s, transform .35s;
+        }
+        /* 当前在哪一侧，哪一侧的图标就更亮、更大 */
+        .theme-switch .sun  { opacity: 1;   transform: scale(1.1); }
+        .theme-switch .moon { opacity: .45; transform: scale(.92); }
+        :root.night .theme-switch .sun  { opacity: .45; transform: scale(.92); }
+        :root.night .theme-switch .moon { opacity: 1;   transform: scale(1.1); }
+
+        /* 开关本体：轨道 + 滑块 */
+        .theme-switch .track {
+            position: relative; width: 46px; height: 24px;
+            border-radius: 12px; background: #cfe0fb;
+            transition: background-color .35s;
+        }
+        :root.night .theme-switch .track { background: #2a3a63; }
+
+        .theme-switch .knob {
+            position: absolute; left: 3px; top: 3px;
+            width: 18px; height: 18px; border-radius: 50%;
+            background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .28);
+            /* 22px = 轨道 46 - 滑块 18 - 两边各 3px 内边距 */
+            transition: transform .38s cubic-bezier(.4, 1.4, .6, 1), background-color .35s;
+        }
+        :root.night .theme-switch .knob {
+            transform: translateX(22px);
+            background: #e9eefc;
+        }
+
+        /* ===================== 登录卡片 ===================== */
+        .login-card {
+            position: relative; z-index: 2;
+            width: 360px; max-width: 100%;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 16px; padding: 32px 30px;
+            box-shadow: var(--shadow);
+            /* 毛玻璃只加在卡片自己身上：卡片背后的星星被柔化，卡片周围保持清晰 */
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            transition: background-color .6s, border-color .6s, box-shadow .6s;
+        }
+        .login-card h1 { font-size: 21px; margin-bottom: 6px; }
+        .login-card .sub { font-size: 12px; color: var(--muted); margin-bottom: 24px; }
+
+        .field { margin-bottom: 14px; }
+        .field input {
+            width: 100%; padding: 12px 13px;
+            border: 1px solid var(--border); border-radius: 9px;
+            background: transparent; color: var(--text);
+            font-family: inherit; font-size: 14px;
+            transition: border-color .15s, box-shadow .15s;
+        }
+        .field input::placeholder { color: var(--muted); }
+        .field input:focus {
+            outline: none; border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(29, 111, 234, .16);
+        }
+
+        .row-between {
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 13px; color: var(--muted); margin: 4px 0 20px;
+        }
+        .row-between label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+        .link { color: var(--accent); text-decoration: none; }
+        .link:hover { text-decoration: underline; }
+
+        .btn-login {
+            width: 100%; padding: 13px 0;
+            border: none; border-radius: 9px;
+            background: linear-gradient(135deg, #1d6fea, #3d8bfd);
+            color: #fff; font-family: inherit; font-size: 15px;
+            letter-spacing: 2px; cursor: pointer;
+            transition: transform .12s, box-shadow .2s;
+        }
+        .btn-login:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(29, 111, 234, .35);
+        }
+
+        .foot {
+            margin-top: 20px; text-align: center;
+            font-size: 12px; color: var(--muted);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- 两层背景：白天 / 夜晚 -->
+    <div id="bgDay"></div>
+    <div id="bgNight"></div>
+
+    <!-- 星空层 -->
+    <div id="sky">
+        <div id="stars"></div>
+        <div id="moon"></div>
+        <div id="meteors"></div>
+    </div>
+
+    <!-- 主题开关：☀️ 白天 〔开关〕 黑夜 🌙
+         开关的样子（图标明暗、滑块位置、轨道颜色）完全由 CSS 根据
+         <html> 上的 night 类决定，JS 只切类，不需要再同步界面 -->
+    <button id="themeSwitch" class="theme-switch" type="button"
+            role="switch" aria-checked="false" aria-label="切换白天 / 黑夜">
+        <span class="ico sun">☀️</span>
+        <span class="track"><span class="knob"></span></span>
+        <span class="ico moon">🌙</span>
+    </button>
+
+    <!-- 登录卡片 -->
+    <div class="login-card">
+        <h1>欢迎回来</h1>
+        <!-- <p class="sub">登录后继续你的课程</p> -->
+
+        <div class="field">
+            <input type="text" placeholder="账号 / 邮箱">
+        </div>
+        <div class="field">
+            <input type="password" placeholder="密码">
+        </div>
+
+        <div class="row-between">
+            <label><input type="checkbox"> 记住我</label>
+            <a href="#" class="link">忘记密码？</a>
+        </div>
+
+        <button class="btn-login" type="button">登 录</button>
+
+        <p class="foot">还没有账号？<a href="#" class="link">立即注册</a></p>
+    </div>
+
+    <!-- 外部 CDN 引入 jQuery 4.0.0（国内推荐 bootcdn） -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/4.0.0/jquery.min.js"></script>
+    <script>
+        $(function () {
+
+            function isNight() {
+                return $('html').hasClass('night');
+            }
+
+            $('#themeSwitch').on('click', function () {
+                $('html').toggleClass('night');
+
+                var night = isNight();
+                $('#sky').stop(true, true)[night ? 'fadeIn' : 'fadeOut'](600);
+
+                try {
+                    localStorage.setItem('theme', night ? 'night' : 'day');
+                } catch (e) { }
+
+                $(this).attr('aria-checked', night);   // 无障碍状态跟着走
+
+                if (night) spawnMeteor();              // 切到夜里先来一颗流星
+            });
+
+            function pickLevel() {
+                var r = Math.random();
+                if (r < 0.62) return 1;        // 62% 小暗星
+                if (r < 0.92) return 2;        // 30% 中等
+                return 3;                      // 8% 大亮星
+            }
+
+            function buildStars() {
+                var $wrap = $('#stars').empty();
+                var W = $(window).width();
+                var H = $(window).height();
+
+                var COLS = 18, ROWS = 11;      // 屏幕切成 18 × 11 格
+                var cellW = W / COLS;
+                var cellH = H / ROWS;
+                var total = 0;
+
+                for (var r = 0; r < ROWS; r++) {
+                    for (var c = 0; c < COLS; c++) {
+                        // 每格 1 颗，35% 的格子补 1 颗 → 疏密有变化但不扎堆
+                        var count = Math.random() < 0.35 ? 2 : 1;
+                        for (var k = 0; k < count; k++) {
+                            var lv = pickLevel();
+                            var x = Math.round(c * cellW + Math.random() * cellW);
+                            var y = Math.round(r * cellH + Math.random() * cellH);
+
+                            var dur = (1.6 + Math.random() * 2.8).toFixed(2);   // 1.6 ~ 4.4 秒
+                            var delay = (Math.random() * 4).toFixed(2);
+                            $('<span></span>')
+                                .addClass('star lv' + lv)
+                                .css({
+                                    left: x + 'px',
+                                    top: y + 'px',
+                                    animationDuration: dur + 's',
+                                    // 负延迟：一开始就处于动画中途，星星不会同时亮起来
+                                    animationDelay: '-' + delay + 's'
+                                })
+                                .appendTo($wrap);
+
+                            total++;
+                        }
+                    }
+                }
+                return total;
+            }
+
+            buildStars();
+
+            var resizeTimer = null;
+            $(window).on('resize', function () {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(function () {
+                    buildStars();
+                }, 300);
+            });
+
+            function spawnMeteor() {
+                if (!isNight()) return;
+                if ($('#meteors .meteor').length >= 2) return;    // 最多同时两颗
+
+                var W = $(window).width();
+                var H = $(window).height();
+
+                var $m = $('<div class="meteor"></div>')
+                    .css({
+                        left: Math.round(Math.random() * W * 0.75) + 'px',
+                        top: Math.round(Math.random() * H * 0.35) + 'px'
+                    })
+                    .appendTo('#meteors');
+
+                setTimeout(function () { $m.remove(); }, 1400);
+            }
+
+            // 每 2.6 秒掷一次骰子，40% 概率来一颗流星
+            setInterval(function () {
+                if (isNight() && Math.random() < 0.4) spawnMeteor();
+            }, 2600);
+
+            $('#themeSwitch').attr('aria-checked', isNight());
+
+            if (isNight()) {
+                $('#sky').fadeIn(600);
+            } else {
+                $('#sky').hide();
+            }
+        });
+    </script>
+</body>
+
+</html>

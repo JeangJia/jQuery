@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<!-- ============================================================
+    应用案例 —— 课程站首页（业务页面，无演示性元素）
+
+    页面功能：顶部导航下拉 → 首页轮播 → 课程筛选 → 课程详情弹窗 → 收藏 + 提示
+
+    知识点落点（仅供复习对照，页面上不展示）：
+      【6.3】
+        mouseenter / mouseleave  —— 导航下拉、轮播悬停暂停
+        slideDown() / slideUp()  —— 下拉菜单展开收起
+        css("background", ...)   —— 导航项移入变深色，移出置空恢复
+        stop() + is(":animated") —— 动画防叠加
+      【6.4】
+        fadeIn()                 —— 轮播进入、弹窗出现
+        fadeOut()                —— 卡片筛选隐藏、弹窗与遮罩关闭、提示消失
+        fadeToggle()             —— 收藏图标 ☆ / ★ 互换
+        fadeTo(speed, 0.5)       —— 详情页的半透明遮罩（元素仍在）
+        delay() + easing         —— 提示条 出现→停留→消失
+
+    【运行方式】浏览器直接打开（需联网加载 CDN 上的 jQuery 4.0.0）。
+    ============================================================ -->
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>jQuery 在线课堂 · 课程中心</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            background: #f4f6fb;
+            color: #2b3445;
+            padding-bottom: 40px;
+        }
+
+        /* ===================== 顶部导航 ===================== */
+        .site-nav {
+            position: sticky; top: 0; z-index: 60;
+            display: flex; align-items: center;
+            background: #37474f; padding: 0 24px;
+            box-shadow: 0 2px 10px rgba(20, 30, 50, .18);
+        }
+        .logo { color: #fff; font-size: 16px; font-weight: 700; line-height: 52px; margin-right: 20px; }
+        .nav { display: flex; }
+        .nav-item {
+            position: relative;               /* 下拉菜单的定位参照 */
+            padding: 16px 20px; color: #fff;
+            font-size: 14px; cursor: pointer;
+        }
+        /* 下拉菜单：默认隐藏，由 slideDown / slideUp 控制 */
+        .submenu {
+            display: none; position: absolute; top: 100%; left: 0;
+            min-width: 168px; background: #fff;
+            border-radius: 0 0 8px 8px; overflow: hidden;
+            box-shadow: 0 8px 20px rgba(20, 30, 50, .22); z-index: 10;
+        }
+        .submenu a {
+            display: block; padding: 11px 16px; font-size: 13px;
+            color: #3b4657; text-decoration: none;
+        }
+        .submenu a:hover { background: #eef3fb; color: #1d6fea; }
+
+        /* ===================== 首页轮播 ===================== */
+        .hero {
+            position: relative; height: 230px; overflow: hidden;
+            margin-bottom: 26px;
+        }
+        /* 注意：参与淡入淡出的元素不要用 flex 布局，
+           因为 fadeIn 只会把 display 恢复成 block */
+        .slide {
+            display: none; position: absolute; inset: 0;
+            padding: 62px 24px; text-align: center; color: #fff;
+        }
+        .slide.active { display: block; }
+        .slide h2 { font-size: 26px; margin-bottom: 10px; }
+        .slide p { font-size: 14px; opacity: .92; }
+        #slide0 { background: linear-gradient(135deg, #1d6fea, #59a2ff); }
+        #slide1 { background: linear-gradient(135deg, #6a4bff, #a17bff); }
+        #slide2 { background: linear-gradient(135deg, #0f9d8f, #4fd1a5); }
+
+        .dots {
+            position: absolute; bottom: 16px; left: 50%;
+            transform: translateX(-50%); display: flex; gap: 9px;
+        }
+        .dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: rgba(255, 255, 255, .45); cursor: pointer;
+            transition: background .2s, transform .2s;
+        }
+        .dot.active { background: #fff; transform: scale(1.25); }
+
+        /* ===================== 课程列表 ===================== */
+        .wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+        .page-title { font-size: 18px; margin-bottom: 14px; }
+
+        .filters { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+        .chip {
+            padding: 8px 16px; border: 1px solid #dde3ec; border-radius: 20px;
+            background: #fff; color: #5a6579; font-size: 13px;
+            font-family: inherit; cursor: pointer; transition: all .18s;
+        }
+        .chip:hover { border-color: #1d6fea; color: #1d6fea; }
+        .chip.active {
+            background: #1d6fea; border-color: #1d6fea; color: #fff;
+            box-shadow: 0 4px 12px rgba(29, 111, 234, .28);
+        }
+
+        .courses {
+            display: grid; gap: 16px;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        }
+        /* 同样：卡片本身要参与 fadeIn / fadeOut，所以不用 flex */
+        .course {
+            background: #fff; border-radius: 12px; padding: 16px;
+            box-shadow: 0 3px 14px rgba(24, 40, 80, .07);
+            border: 1px solid #eef1f7;
+        }
+        .cover {
+            height: 96px; border-radius: 8px; margin-bottom: 12px;
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-size: 26px;
+        }
+        .course h4 { font-size: 15px; margin-bottom: 8px; }
+        .course .desc {
+            font-size: 13px; color: #6b7688; line-height: 1.6;
+            margin-bottom: 10px; min-height: 42px;
+        }
+        .course .meta {
+            font-size: 12px; color: #8a93a5;
+            padding-bottom: 10px; border-bottom: 1px dashed #eef1f7;
+        }
+        .ops {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-top: 12px;
+        }
+        .btn-detail {
+            padding: 7px 14px; border: none; border-radius: 6px;
+            background: #eaf1fe; color: #1d6fea; font-size: 13px;
+            font-family: inherit; cursor: pointer; transition: all .18s;
+        }
+        .btn-detail:hover { background: #1d6fea; color: #fff; }
+        .fav { font-size: 20px; cursor: pointer; line-height: 1; }
+        .ico-empty { color: #c2c9d6; }
+        .ico-fill { color: #f5a623; display: none; }
+
+        /* ===================== 遮罩 + 弹窗 ===================== */
+        #mask {
+            display: none; position: fixed; inset: 0;
+            background: #000; z-index: 90;
+        }
+        #modal {
+            display: none; position: fixed; left: 50%; top: 50%;
+            transform: translate(-50%, -50%);
+            width: min(460px, 88vw); background: #fff;
+            border-radius: 14px; padding: 24px; z-index: 95;
+            box-shadow: 0 20px 50px rgba(10, 20, 40, .3);
+        }
+        #modal h3 { font-size: 17px; margin-bottom: 10px; padding-right: 24px; }
+        #modal .m-desc { font-size: 13px; color: #5f6a7d; line-height: 1.8; margin-bottom: 14px; }
+        #modal .m-info {
+            font-size: 12px; color: #6b7688; background: #f6f8fc;
+            border-radius: 8px; padding: 10px 12px; line-height: 1.9;
+        }
+        #modal .m-info b { color: #1d6fea; }
+        #modalClose {
+            position: absolute; right: 14px; top: 12px; width: 28px; height: 28px;
+            border: none; border-radius: 50%; background: #f1f3f8;
+            color: #6b7688; font-size: 15px; cursor: pointer; line-height: 28px;
+        }
+        #modalClose:hover { background: #e6eaf3; color: #1d6fea; }
+
+        /* ===================== 操作提示 ===================== */
+        #toast {
+            display: none; position: fixed; left: 50%; top: 74px;
+            transform: translateX(-50%);
+            background: rgba(35, 45, 60, .92); color: #fff;
+            padding: 11px 22px; border-radius: 8px; font-size: 13px;
+            z-index: 99; box-shadow: 0 8px 22px rgba(10, 20, 40, .25);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ===================== 顶部导航 ===================== -->
+    <header class="site-nav">
+        <div class="logo">🎓 jQuery 在线课堂</div>
+
+        <nav class="nav">
+            <div class="nav-item">首页</div>
+
+            <div class="nav-item">课程
+                <div class="submenu">
+                    <a href="#">jQuery 基础</a>
+                    <a href="#">jQuery 事件</a>
+                    <a href="#">动画与特效</a>
+                    <a href="#">Ajax 交互</a>
+                </div>
+            </div>
+
+            <div class="nav-item">实践项目
+                <div class="submenu">
+                    <a href="#">图书管理系统</a>
+                    <a href="#">在线书店</a>
+                    <a href="#">待办事项</a>
+                </div>
+            </div>
+
+            <div class="nav-item">师资</div>
+        </nav>
+    </header>
+
+    <!-- ===================== 首页轮播 ===================== -->
+    <section class="hero" id="hero">
+        <div class="slide active" id="slide0">
+            <h2>从选择器到 Ajax，系统学 jQuery</h2>
+            <p>20+ 门课程 · 边写边练 · 每节课都配可运行的案例</p>
+        </div>
+        <div class="slide" id="slide1">
+            <h2>新课上线：动画与特效</h2>
+            <p>show / hide / slide / fade 全家桶，把页面交互做得更细腻</p>
+        </div>
+        <div class="slide" id="slide2">
+            <h2>实践项目：图书管理系统</h2>
+            <p>综合运用选择器、事件、动画与 Ajax，做出一个能跑起来的小系统</p>
+        </div>
+
+        <div class="dots" id="dots">
+            <span class="dot active"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+        </div>
+    </section>
+
+    <!-- ===================== 课程列表 ===================== -->
+    <div class="wrap">
+        <h3 class="page-title">课程中心</h3>
+
+        <div class="filters">
+            <button class="chip active" data-cat="all">全部课程</button>
+            <button class="chip" data-cat="front">前端</button>
+            <button class="chip" data-cat="back">后端</button>
+            <button class="chip" data-cat="practice">实践项目</button>
+        </div>
+
+        <div class="courses" id="courseList">
+
+            <div class="course" data-cat="front"
+                 data-title="jQuery 选择器与 DOM 操作"
+                 data-desc="从 $() 开始，掌握选择器、筛选、链式操作，把 DOM 操作写短、写清楚。"
+                 data-teacher="王老师" data-lessons="12 讲" data-level="入门">
+                <div class="cover" style="background:linear-gradient(135deg,#1d6fea,#59a2ff)">🔍</div>
+                <h4>jQuery 选择器与 DOM 操作</h4>
+                <p class="desc">从 $() 开始，掌握选择器、筛选、链式操作，把 DOM 操作写短、写清楚。</p>
+                <div class="meta">王老师 · 12 讲 · 入门</div>
+                <div class="ops">
+                    <button class="btn-detail">课程详情</button>
+                    <span class="fav" title="收藏"><span class="ico-empty">☆</span><span class="ico-fill">★</span></span>
+                </div>
+            </div>
+
+            <div class="course" data-cat="front"
+                 data-title="jQuery 事件与事件委托"
+                 data-desc="click / mouseenter / on() 委托、冒泡与 stopPropagation，一次把事件体系理清。"
+                 data-teacher="李老师" data-lessons="9 讲" data-level="进阶">
+                <div class="cover" style="background:linear-gradient(135deg,#6a4bff,#a17bff)">🖱</div>
+                <h4>jQuery 事件与事件委托</h4>
+                <p class="desc">click / mouseenter / on() 委托、冒泡与 stopPropagation，一次把事件体系理清。</p>
+                <div class="meta">李老师 · 9 讲 · 进阶</div>
+                <div class="ops">
+                    <button class="btn-detail">课程详情</button>
+                    <span class="fav" title="收藏"><span class="ico-empty">☆</span><span class="ico-fill">★</span></span>
+                </div>
+            </div>
+
+            <div class="course" data-cat="front"
+                 data-title="jQuery 动画与特效"
+                 data-desc="show / hide / slide / fade 全家桶，重点讲清 fadeOut 与 fadeTo 的区别。"
+                 data-teacher="张老师" data-lessons="7 讲" data-level="进阶">
+                <div class="cover" style="background:linear-gradient(135deg,#0f9d8f,#4fd1a5)">🌫</div>
+                <h4>jQuery 动画与特效</h4>
+                <p class="desc">show / hide / slide / fade 全家桶，重点讲清 fadeOut 与 fadeTo 的区别。</p>
+                <div class="meta">张老师 · 7 讲 · 进阶</div>
+                <div class="ops">
+                    <button class="btn-detail">课程详情</button>
+                    <span class="fav" title="收藏"><span class="ico-empty">☆</span><span class="ico-fill">★</span></span>
+                </div>
+            </div>
+
+            <div class="course" data-cat="back"
+                 data-title="Node.js 接口入门"
+                 data-desc="用 Express 写一套 REST 接口，前后端联调时不再只靠猜。"
+                 data-teacher="赵老师" data-lessons="15 讲" data-level="入门">
+                <div class="cover" style="background:linear-gradient(135deg,#f5623b,#ff9a76)">🛠</div>
+                <h4>Node.js 接口入门</h4>
+                <p class="desc">用 Express 写一套 REST 接口，前后端联调时不再只靠猜。</p>
+                <div class="meta">赵老师 · 15 讲 · 入门</div>
+                <div class="ops">
+                    <button class="btn-detail">课程详情</button>
+                    <span class="fav" title="收藏"><span class="ico-empty">☆</span><span class="ico-fill">★</span></span>
+                </div>
+            </div>
+
+            <div class="course" data-cat="back"
+                 data-title="Ajax 数据交互实战"
+                 data-desc="$.ajax / $.get / $.post 的取舍，加载态、错误处理与失败重试。"
+                 data-teacher="孙老师" data-lessons="10 讲" data-level="进阶">
+                <div class="cover" style="background:linear-gradient(135deg,#0288d1,#4fc3f7)">🔄</div>
+                <h4>Ajax 数据交互实战</h4>
+                <p class="desc">$.ajax / $.get / $.post 的取舍，加载态、错误处理与失败重试。</p>
+                <div class="meta">孙老师 · 10 讲 · 进阶</div>
+                <div class="ops">
+                    <button class="btn-detail">课程详情</button>
+                    <span class="fav" title="收藏"><span class="ico-empty">☆</span><span class="ico-fill">★</span></span>
+                </div>
+            </div>
+
+            <div class="course" data-cat="practice"
+                 data-title="实践：图书管理系统"
+                 data-desc="综合运用选择器、事件、动画与 Ajax，做一个能跑起来的小系统。"
+                 data-teacher="项目组" data-lessons="20 讲" data-level="综合">
+                <div class="cover" style="background:linear-gradient(135deg,#8e24aa,#ce93d8)">📚</div>
+                <h4>实践：图书管理系统</h4>
+                <p class="desc">综合运用选择器、事件、动画与 Ajax，做一个能跑起来的小系统。</p>
+                <div class="meta">项目组 · 20 讲 · 综合</div>
+                <div class="ops">
+                    <button class="btn-detail">课程详情</button>
+                    <span class="fav" title="收藏"><span class="ico-empty">☆</span><span class="ico-fill">★</span></span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ===================== 遮罩 + 弹窗 ===================== -->
+    <div id="mask"></div>
+    <div id="modal">
+        <button id="modalClose">✕</button>
+        <h3 id="mTitle"></h3>
+        <p class="m-desc" id="mDesc"></p>
+        <div class="m-info">
+            讲师：<b id="mTeacher"></b><br>
+            课时：<b id="mLessons"></b><br>
+            难度：<b id="mLevel"></b>
+        </div>
+    </div>
+
+    <!-- ===================== 操作提示 ===================== -->
+    <div id="toast"></div>
+
+    <!-- 外部 CDN 引入 jQuery 4.0.0（国内推荐 bootcdn） -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/4.0.0/jquery.min.js"></script>
+    <script>
+        $(function () {
+
+            /* =========================================================
+               ① 顶部导航下拉
+               mouseenter / mouseleave（不冒泡）+ slideDown / slideUp
+               stop() + is(":animated") 防止动画叠加
+               ========================================================= */
+            $('.nav-item').on('mouseenter', function () {
+                $(this).css('background', '#2b3a45');
+
+                var $sub = $(this).children('.submenu');
+                if ($sub.length === 0) return;              // 首页 / 师资没有子菜单
+                if ($sub.is(':animated')) return;           // 正在播动画就跳过
+
+                $sub.stop(true, true).slideDown(220);
+            }).on('mouseleave', function () {
+                $(this).css('background', '');              // 置空 = 恢复默认
+
+                var $sub = $(this).children('.submenu');
+                if ($sub.length === 0) return;
+                if ($sub.is(':animated')) return;
+
+                $sub.stop(true, true).slideUp(220);
+            });
+
+            /* =========================================================
+               ② 首页轮播：交叉淡入淡出
+               旧的 fadeOut、新的 fadeIn 同时进行，过程中两张图重叠
+               所以"当前是第几张"只能由 cur 变量记住，不能靠 is(':visible')
+               ========================================================= */
+            var SLIDE_COUNT = $('.slide').length;   // 用实际数量，以后加图不用改代码
+            var EASING = 'swing';                   // 缓起缓停；改 'linear' 是匀速
+            var cur = 0;                            // 当前显示第几张
+            var paused = false;                     // 鼠标在轮播上时暂停自动播放
+
+            function goTo(i) {
+                i = (i + SLIDE_COUNT) % SLIDE_COUNT;    // 循环：3 → 0，-1 → 2
+                if (i === cur) return;                  // 同一张就不用重播
+
+                $('.slide').eq(cur).stop(true, true).fadeOut(500, EASING);
+                $('.slide').eq(i).stop(true, true).fadeIn(500, EASING);
+
+                $('.dot').removeClass('active').eq(i).addClass('active');
+                cur = i;                                // 记得更新状态
+            }
+
+            $('#dots').on('click', '.dot', function () {
+                goTo($(this).index());                  // 圆点位置 = 第几张图
+            });
+
+            $('#hero').on('mouseenter', function () {
+                paused = true;
+            }).on('mouseleave', function () {
+                paused = false;
+            });
+
+            setInterval(function () {
+                if (!paused) goTo(cur + 1);
+            }, 3200);
+
+            /* =========================================================
+               ③ 课程筛选：匹配的 fadeIn、其余 fadeOut
+               先判断当前状态再决定播不播动画，避免卡片来回闪
+               ========================================================= */
+            $('.chip').on('click', function () {
+                var $chip = $(this);
+                var cat = $chip.data('cat');
+
+                $chip.addClass('active').siblings('.chip').removeClass('active');
+
+                $('.course').each(function () {
+                    var $c = $(this);
+                    var match = (cat === 'all' || $c.data('cat') === cat);
+
+                    if (match && $c.is(':hidden')) {
+                        $c.stop(true, true).fadeIn(300);
+                    } else if (!match && $c.is(':visible')) {
+                        $c.stop(true, true).fadeOut(300);
+                    }
+                });
+            });
+
+            /* =========================================================
+               ④ 课程详情：遮罩用 fadeTo 停在半透明（元素还在），
+                  弹窗用 fadeIn；关闭时才 fadeOut
+               ========================================================= */
+            function openModal($course) {
+                $('#mTitle').text($course.data('title'));
+                $('#mDesc').text($course.data('desc'));
+                $('#mTeacher').text($course.data('teacher'));
+                $('#mLessons').text($course.data('lessons'));
+                $('#mLevel').text($course.data('level'));
+
+                $('#mask').stop(true, true).fadeTo(300, 0.5);
+                $('#modal').stop(true, true).fadeIn(300);
+            }
+
+            function closeModal() {
+                if ($('#modal').is(':hidden')) return;
+
+                $('#mask').stop(true, true).fadeOut(300);
+                $('#modal').stop(true, true).fadeOut(300);
+            }
+
+            $('#courseList').on('click', '.btn-detail', function () {
+                openModal($(this).closest('.course'));
+            });
+
+            $('#mask').on('click', closeModal);          // 点遮罩关闭
+            $('#modalClose').on('click', closeModal);
+
+            $(document).on('keydown', function (e) {     // 按 Esc 也能关
+                if (e.key === 'Escape') closeModal();
+            });
+
+            /* =========================================================
+               ⑤ 收藏：fadeToggle 一次切换 ☆ / ★
+                  提示条：fadeIn → delay → fadeOut
+               ========================================================= */
+            function showToast(msg) {
+                $('#toast').stop(true, true).hide()
+                    .text(msg)
+                    .fadeIn(300)
+                    .delay(1200)
+                    .fadeOut(400);
+            }
+
+            $('#courseList').on('click', '.fav', function () {
+                var $fav = $(this);
+
+                // 先算出切换后的状态，再播动画（动画途中读 :visible 不可靠）
+                var willBeFaved = !$fav.find('.ico-fill').is(':visible');
+
+                $fav.find('.ico-empty, .ico-fill').fadeToggle(180);
+
+                showToast(willBeFaved ? '已加入收藏 ★' : '已取消收藏');
+            });
+        });
+    </script>
+</body>
+
+</html>

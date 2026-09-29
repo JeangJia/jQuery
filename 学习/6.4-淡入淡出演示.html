@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<!-- ============================================================
+     第 6 课次案例 6.4 —— 淡入淡出特效（fadeIn / fadeOut / fadeToggle / fadeTo）
+     【知识点】
+       1. fadeIn(speed, fn)     透明度 0 → 1，常用于提示出现、图片淡入
+       2. fadeOut(speed, fn)    透明度 1 → 0，结束后 display:none（元素彻底消失）
+       3. fadeToggle(speed, fn) 自动切换淡入/淡出，一个按钮控两态
+       4. fadeTo(speed, opacity, fn) 调到【指定不透明度】并停住（如 0.5 半透遮罩）
+       5. 参数与 show/hide/slide 完全一致：[speed, easing, callback]
+     【案例功能】
+       ① 四方法逐一演示，右侧实时显示 opacity 与是否可见（关键：看清 fadeOut 与 fadeTo 的区别）
+       ② 三个典型场景：toast 提示自动消失、半透明遮罩、图片交叉切换
+       ③ swing / linear 并排对比（补 6.1 未演示的 easing 参数）
+       【案例演示】点 fadeOut（盯右侧 opacity 1→0，最后变成"已消失"）→ 点"重置"
+                  → 点 fadeTo(400, 0.5)（opacity 停在 0.5，元素【还在】）
+                  → 点 toast 场景 → 点遮罩 → 点图片切换 → 最后并排跑 swing/linear。
+       淡入淡出改的是**透明度**，视觉上比 show/hide 柔和。／四个方法：fadeIn 淡入、
+       fadeOut 淡出、fadeToggle 自动切换、fadeTo 停在指定透明度。／
+       关键区别在这儿——右侧这个数字：我点 fadeOut，opacity 一路降到 0，
+       最后元素**彻底消失**，display 变成 none。／换成 fadeTo(400, 0.5)，
+       opacity 停在 0.5，元素**还在**，只是半透明。／所以做弹窗的黑色遮罩，
+       必须用 fadeTo，用 fadeOut 遮罩会直接没了、弹窗就"飘"在页面上。／
+       场景三连：提示 fadeIn 进来、delay 停一下、fadeOut 自动消失；
+       遮罩用 fadeTo 停在半透；图片切换是两张交叉淡入淡出。／
+       最后看并排这两块——同样 600 毫秒，swing 缓起缓停，linear 匀速，手感完全不同。
+       【重点】fadeOut 结束后元素消失（display:none）；fadeTo 停在半透 —— 遮罩必须用 fadeTo。
+       【易踩的坑】fadeOut 演示完必须点"重置"再演示下一个，否则元素已
+                      display:none 看不出效果；fadeTo 作用在隐藏元素上会自动先显示；
+                      并排对比 swing/linear 时，两块方块要同时点，差异才明显。
+     【运行方式】浏览器直接打开。
+     ============================================================ -->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>jQuery 淡入淡出特效 · fadeIn / fadeOut / fadeToggle / fadeTo</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; max-width: 860px;
+               margin: 25px auto; color: #333; padding: 0 15px; }
+        h1 { font-size: 22px; }
+        h2 { font-size: 16px; color: #1565c0; margin: 22px 0 8px;
+             border-left: 4px solid #2196f3; padding-left: 8px; }
+        .tip { color: #666; font-size: 14px; line-height: 1.8; background: #f5f9ff;
+               border-left: 4px solid #2196f3; padding: 8px 12px; }
+        .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px 16px; margin: 10px 0; }
+        table.cmp { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+        table.cmp th, table.cmp td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+        table.cmp th { background: #2196f3; color: #fff; }
+        .row { margin: 8px 0; }
+        button { padding: 6px 14px; margin: 4px 4px 4px 0; cursor: pointer; font-size: 13px; }
+        /* 演示方块 */
+        .wrap { display: flex; align-items: flex-start; gap: 20px; }
+        .stage { flex: 1; height: 120px; background: #fafafa; border: 1px dashed #bbb;
+                 border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+        .box { width: 240px; height: 90px; line-height: 90px; text-align: center;
+               background: #4fc3f7; color: #fff; font-weight: bold; border-radius: 8px; }
+        .status { width: 250px; font-size: 13px; line-height: 2; background: #fffde7;
+                  border: 1px solid #fbc02d; border-radius: 8px; padding: 8px 12px; }
+        .status b { color: #c62828; }
+        /* 场景区 */
+        .scene { position: relative; height: 130px; background: #f5f5f5;
+                 border-radius: 8px; overflow: hidden; }
+        #toast { display: none; position: absolute; left: 50%; top: 16px;
+                 transform: translateX(-50%); background: #323232; color: #fff;
+                 padding: 10px 18px; border-radius: 6px; font-size: 14px; }
+        #mask { display: none; position: absolute; inset: 0; background: #000; }
+        .pic { position: absolute; inset: 0; display: flex; align-items: center;
+               justify-content: center; color: #fff; font-size: 20px; font-weight: bold; }
+        #picA { background: linear-gradient(135deg, #42a5f5, #478ed1); }
+        #picB { display: none; background: linear-gradient(135deg, #66bb6a, #43a047); }
+        /* easing 并排对比 */
+        .two { display: flex; gap: 16px; }
+        .two > div { flex: 1; height: 90px; display: flex; align-items: center;
+                     justify-content: center; color: #fff; font-weight: bold; border-radius: 8px; }
+        #swBox { background: #ef5350; }
+        #lnBox { background: #5c6bc0; }
+        code { background: #f2f2f2; padding: 1px 5px; border-radius: 3px; }
+        .hl { color: #c62828; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>🌫 淡入淡出特效 · fadeIn / fadeOut / fadeToggle / fadeTo</h1>
+    <div class="tip">
+        淡入淡出改的是<b>透明度</b>，视觉最柔和。<b>本课唯一必须分清的一组</b>：
+        <code>fadeOut()</code> 结束后元素<b>彻底消失</b>（<code>display:none</code>）；
+        <code>fadeTo(400, 0.5)</code> 元素<b>还在，只是半透明</b> —— 做遮罩必须用 <code>fadeTo</code>。
+    </div>
+
+    <table class="cmp">
+        <tr><th>方法</th><th>效果</th><th>结束后</th><th>典型场景</th></tr>
+        <tr><td>fadeIn(speed, fn)</td><td>透明度 0 → 1</td><td>完全可见</td><td>提示出现、图片淡入</td></tr>
+        <tr><td>fadeOut(speed, fn)</td><td>透明度 1 → 0</td><td class="hl">display:none（消失）</td><td>提示自动消失</td></tr>
+        <tr><td>fadeToggle(speed, fn)</td><td>自动切换</td><td>视当前状态</td><td>一个按钮控两态</td></tr>
+        <tr><td>fadeTo(speed, opacity, fn)</td><td>调到指定值</td><td class="hl">停在中间值（仍在）</td><td>半透明遮罩</td></tr>
+    </table>
+
+    <h2>一、四方法逐一演示（盯住右侧状态）</h2>
+    <div class="card">
+        <div class="wrap">
+            <div class="stage"><div class="box" id="box">我会淡入淡出……</div></div>
+            <div class="status" id="status">
+                当前 opacity：<b id="op">1</b><br>
+                元素是否可见：<b id="vis">可见</b><br>
+                是否正在动画：<b id="ani">否</b>
+            </div>
+        </div>
+        <div class="row">
+            <button id="btnIn">fadeIn(600)</button>
+            <button id="btnOut">fadeOut(600)</button>
+            <button id="btnToggle">fadeToggle(600)</button>
+            <button id="btnTo">fadeTo(600, 0.5)</button>
+            <button id="btnReset">重置</button>
+        </div>
+        <div style="font-size:13px;color:#888">
+            演示顺序建议：<b>fadeOut → 重置 → fadeTo</b>，对比"消失"与"停在半透"的区别。
+        </div>
+    </div>
+
+    <h2>二、三个典型场景</h2>
+    <div class="card">
+        <div class="row">
+            <button id="btnToast">① toast 提示：fadeIn → delay → fadeOut</button>
+            <button id="btnMask">② 半透遮罩：fadeTo(400, 0.5)</button>
+            <button id="btnMaskOff">撤掉遮罩</button>
+            <button id="btnSwap">③ 图片交叉切换：两张交替 fadeOut / fadeIn</button>
+        </div>
+        <div class="scene">
+            <div id="picA" class="pic">图片 A</div>
+            <div id="picB" class="pic">图片 B</div>
+            <div id="mask"></div>
+            <div id="toast">提交成功 ✓</div>
+        </div>
+        <div style="font-size:13px;color:#888;margin-top:6px">
+            代码对照：<code>$(".tip").fadeIn(600).delay(1500).fadeOut(600)</code>、
+            <code>$(".mask").fadeTo("fast", 0.5)</code>
+        </div>
+    </div>
+
+    <h2>三、easing 并排对比（补 6.1 未演示的参数）</h2>
+    <div class="card">
+        <div class="two">
+            <div id="swBox">swing（缓起缓停）</div>
+            <div id="lnBox">linear（匀速）</div>
+        </div>
+        <div class="row">
+            <button id="btnEase">同时跑 600ms（swing vs linear）</button>
+            <button id="btnEaseBack">淡回来</button>
+        </div>
+        <div style="font-size:13px;color:#888">
+            同样 600 毫秒：<code>fadeTo(600, 0.15)</code> 一个用 <code>"swing"</code>、一个用
+            <code>"linear"</code>，观察起步与收尾的手感差异。
+        </div>
+    </div>
+
+    <script>
+        $(function () {
+
+            /* ---------- 状态面板：实时显示 opacity / 是否可见 / 是否动画中 ---------- */
+            setInterval(function () {
+                var $b = $("#box");
+                $("#op").text(Number($b.css("opacity")).toFixed(2));
+                $("#vis").text($b.is(":visible") ? "可见" : "已消失（display:none）");
+                $("#ani").text($b.is(":animated") ? "是" : "否");
+            }, 80);
+
+            /* =========================================================
+               四方法
+               ========================================================= */
+            $("#btnIn").click(function () {
+                $("#box").stop(true, true).hide().fadeIn(600);   // 先复位再淡入，便于反复演示
+            });
+            $("#btnOut").click(function () {
+                $("#box").stop(true, true).show().css("opacity", 1).fadeOut(600);
+            });
+            $("#btnToggle").click(function () {
+                $("#box").stop(true, true).fadeToggle(600);
+            });
+            $("#btnTo").click(function () {
+                // fadeTo：停在指定透明度，元素不会消失
+                $("#box").stop(true, true).show().fadeTo(600, 0.5);
+            });
+            $("#btnReset").click(function () {
+                $("#box").stop(true, true).show().css("opacity", 1);
+            });
+
+            /* =========================================================
+               场景① toast：出现 → 停留 → 自动消失
+               链式：fadeIn().delay().fadeOut()
+               ========================================================= */
+            $("#btnToast").click(function () {
+                $("#toast").stop(true, true).hide()
+                           .fadeIn(600).delay(1500).fadeOut(600);
+            });
+
+            /* =========================================================
+               场景② 遮罩：fadeTo 停在半透明（元素仍在，不会消失）
+               ========================================================= */
+            $("#btnMask").click(function () {
+                $("#mask").stop(true, true).hide().fadeTo(400, 0.5);
+            });
+            $("#btnMaskOff").click(function () {
+                $("#mask").stop(true, true).fadeOut(300);
+            });
+
+            /* =========================================================
+               场景③ 图片交叉切换：A 淡出、B 淡入
+               ========================================================= */
+            $("#btnSwap").click(function () {
+                if ($("#picA").is(":visible")) {
+                    $("#picA").stop(true, true).fadeOut(600);
+                    $("#picB").stop(true, true).fadeIn(600);
+                } else {
+                    $("#picB").stop(true, true).fadeOut(600);
+                    $("#picA").stop(true, true).fadeIn(600);
+                }
+            });
+
+            /* =========================================================
+               easing 对比：swing（默认，缓起缓停） vs linear（匀速）
+               ========================================================= */
+            $("#btnEase").click(function () {
+                $("#swBox").stop(true, true).fadeTo(600, 0.15, "swing");
+                $("#lnBox").stop(true, true).fadeTo(600, 0.15, "linear");
+            });
+            $("#btnEaseBack").click(function () {
+                $("#swBox").stop(true, true).fadeTo(600, 1, "swing");
+                $("#lnBox").stop(true, true).fadeTo(600, 1, "linear");
+            });
+        });
+    </script>
+</body>
+</html>

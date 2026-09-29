@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<!-- ============================================================
+     第 6/7 课次案例 6.3 —— 导航下拉列表
+     【知识点】
+       1. mouseenter / mouseleave 事件
+       2. slideDown() / slideUp() 展开收起下拉菜单
+       3. css() 修改背景色
+       4. is(':animated') 判断元素是否处于动画状态（避免动画叠加）
+     【案例功能】
+       网站导航栏含有下拉菜单，鼠标移入导航选项时显示下拉菜单，
+       鼠标移出后隐藏；移入时改变选项背景色，移出恢复。
+     【案例演示】鼠标移入"课程"（菜单滑出 + 底色变深）→ 移出（收起 + 底色还原）
+                  → 现场去掉 stop() 与 is(':animated')，快速在菜单上进进出出（抽搐）
+                  → 加回防护再晃一次（稳如磐石）。
+       导航栏天天见，今天亲手做一个：鼠标移入滑出、移出收起，底色跟着变。／
+       事件用 mouseenter 和 mouseleave，为什么不用 mouseover？因为它会冒泡，
+       鼠标一进子菜单就反复触发，菜单会抖——这正好是上节课冒泡的内容。／
+       现在看重点：我把 stop() 和 :animated 判断去掉，快速在菜单上进进出出——
+       看到了吗？菜单开始"抽搐"，半天停不下来，因为 slideDown 和 slideUp
+       一个接一个排着队。／怎么防？两招配合：第一，动画前判断 is(':animated')，
+       正在播就直接跳过；第二，用 stop() 把前面排队的动画清掉再播新的。／
+       待会儿上机一定要自己快速晃动鼠标，感受一下"没防"和"防了"的区别——
+       这个坑，看别人讲十遍，不如自己撞一次。
+       【重点】防叠加两招：stop() 清队列 + :animated 跳过。
+       【易踩的坑】"去掉防护"必须现场改代码并刷新才有效，只靠口述没有冲击力；
+                      晃动鼠标要贴着菜单边缘蹭，抖动才明显。
+     【运行方式】浏览器直接打开。
+     ============================================================ -->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>jQuery 导航下拉列表</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; margin: 0; }
+        /* 导航栏 */
+        .nav { background: #37474f; display: flex; padding: 0 20px; }
+        .nav-item { position: relative; padding: 14px 22px; color: #fff;
+                    cursor: pointer; }
+        .nav-item:hover { background: #546e7a; }  /* CSS 方式也可以改色 */
+        /* 下拉菜单：默认隐藏 */
+        .submenu { display: none; position: absolute; top: 100%; left: 0;
+                   background: #fff; min-width: 160px; box-shadow: 0 4px 12px
+                   rgba(0,0,0,.25); border-radius: 0 0 6px 6px; z-index: 10; }
+        .submenu a { display: block; padding: 10px 16px; color: #333;
+                     text-decoration: none; }
+        .submenu a:hover { background: #eceff1; }
+        .content { padding: 40px; }
+    </style>
+</head>
+<body>
+
+    <!-- 导航栏 -->
+    <div class="nav">
+        <div class="nav-item">首页</div>
+
+        <!-- “课程”菜单：含下拉子菜单 -->
+        <div class="nav-item" id="courseMenu">
+            课程
+            <div class="submenu">
+                <a href="#">jQuery 基础</a>
+                <a href="#">jQuery 事件</a>
+                <a href="#">Ajax 交互</a>
+                <a href="#">服务器开发</a>
+            </div>
+        </div>
+
+        <div class="nav-item">师资</div>
+
+        <!-- “实践”菜单：含下拉子菜单 -->
+        <div class="nav-item" id="practiceMenu">
+            实践项目
+            <div class="submenu">
+                <a href="#">图书管理系统</a>
+                <a href="#">在线书店</a>
+                <a href="#">待办事项</a>
+            </div>
+        </div>
+
+        <div class="nav-item">联系我们</div>
+    </div>
+
+    <div class="content">
+        <h1>🧭 导航下拉列表案例</h1>
+        <p>鼠标移入“课程 / 实践项目”查看下拉菜单，移出后自动收起。</p>
+    </div>
+
+    <script>
+        $(function () {
+            /* =====================================================
+               【知识 1】鼠标移入 / 移出事件
+               mouseenter：鼠标进入元素时触发（不会冒泡）
+               mouseleave：鼠标离开元素时触发（不会冒泡）
+               对比：mouseover / mouseout 会冒泡，频繁触发
+               ===================================================== */
+            /* =====================================================
+               【知识 2】is(':animated') 判断是否正在播放动画
+               用途：防止鼠标快速移入移出时，动画重复叠加排队
+               原理：元素正在执行动画时，is(':animated') 返回 true
+               ===================================================== */
+            $(".nav-item").mouseenter(function () {
+                // 1. 改变当前菜单背景色
+                $(this).css("background", "#546e7a");
+
+                // 2. 找到下拉菜单并滑出
+                var sub = $(this).children(".submenu");
+
+                // 如果下拉菜单正在播放动画，则跳过（防止动画堆积）
+                if (!sub.is(":animated")) {
+                    sub.stop().slideDown(250);
+                }
+            });
+
+            $(".nav-item").mouseleave(function () {
+                // 1. 恢复背景色
+                $(this).css("background", "");   // 设置为空 = 恢复默认
+
+                // 2. 收起下拉菜单
+                var sub = $(this).children(".submenu");
+                if (!sub.is(":animated")) {
+                    sub.stop().slideUp(250);
+                }
+            });
+
+            /* =====================================================
+               【教学补充】stop() 停止动画
+               stop(stopAll, goToEnd)
+               stopAll：是否清除动画队列（默认 false）
+               goToEnd：是否立即完成当前动画（默认 false）
+               这里使用了 sub.stop().slideUp() 防止动画叠加
+               ===================================================== */
+        });
+    </script>
+</body>
+</html>

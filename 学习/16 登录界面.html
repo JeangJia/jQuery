@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录界面 - 显示隐藏在真实业务里的用法</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #eef3fb 0%, #dfe9fa 60%, #e8effc 100%);
+            padding: 24px 16px 56px;
+        }
+
+        /* ---------- 卡片 ---------- */
+        .card {
+            width: 380px;
+            background: #fff;
+            border-radius: 14px;
+            padding: 28px;
+            box-shadow: 0 12px 32px rgba(24, 40, 80, .10);
+        }
+
+        .brand h1 { font-size: 20px; color: #1f2b45; }
+        .brand p { font-size: 12px; color: #8a90a0; margin-top: 5px; }
+
+        .api-line {
+            display: inline-block; margin-top: 10px;
+            font-family: Consolas, monospace; font-size: 11px;
+            color: #1d6fea; background: #eaf1fe;
+            padding: 3px 9px; border-radius: 10px;
+        }
+
+        /* ---------- 登录 / 注册 切换 ---------- */
+        .tabs {
+            display: flex; gap: 4px; background: #f1f3f8;
+            padding: 4px; border-radius: 9px; margin: 18px 0 20px;
+        }
+        .tab {
+            flex: 1; padding: 9px 0; border: none; background: transparent;
+            color: #6b7280; font-size: 14px; font-family: inherit;
+            border-radius: 7px; cursor: pointer; transition: all .18s;
+        }
+        .tab.active {
+            background: #fff; color: #1d6fea; font-weight: 600;
+            box-shadow: 0 1px 5px rgba(24, 40, 80, .10);
+        }
+
+        /* ---------- 表单 ---------- */
+        .field { margin-bottom: 14px; }
+        .input-wrap { position: relative; }
+
+        .field input {
+            width: 100%; padding: 11px 42px 11px 12px;
+            border: 1px solid #dde1e8; border-radius: 8px;
+            font-size: 14px; font-family: inherit;
+            transition: border-color .15s, box-shadow .15s;
+        }
+        .field input:focus {
+            outline: none; border-color: #1d6fea;
+            box-shadow: 0 0 0 3px rgba(29, 111, 234, .12);
+        }
+        .field input.error { border-color: #e74c3c; }
+        .field input.error:focus { box-shadow: 0 0 0 3px rgba(231, 76, 60, .12); }
+
+        /* 密码可见性切换的小眼睛 */
+        .eye {
+            position: absolute; right: 11px; top: 50%;
+            transform: translateY(-50%);
+            font-size: 15px; cursor: pointer; opacity: .5;
+            user-select: none; line-height: 1;
+        }
+        .eye:hover { opacity: .95; }
+
+        /* 错误提示：默认藏起来，有错才滑下来 */
+        .tip {
+            display: none; margin-top: 6px; font-size: 12px; color: #e74c3c;
+        }
+        .tip::before { content: "⚠ "; }
+
+        .row-between {
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 13px; color: #6b7280; margin: 2px 0 18px;
+        }
+        .row-between label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+        .link { color: #1d6fea; cursor: pointer; }
+        .link:hover { text-decoration: underline; }
+
+        .btn-submit {
+            width: 100%; padding: 12px 0; border: none; border-radius: 8px;
+            background: linear-gradient(135deg, #1d6fea, #3d8bfd);
+            color: #fff; font-size: 15px; font-family: inherit;
+            letter-spacing: 1px; cursor: pointer;
+            transition: opacity .2s, transform .1s;
+        }
+        .btn-submit:hover:not(:disabled) { transform: translateY(-1px); }
+        .btn-submit:disabled { opacity: .72; cursor: not-allowed; }
+
+        /* 提交中的小转圈 */
+        .spinner {
+            display: inline-block; width: 12px; height: 12px;
+            margin-right: 6px; vertical-align: -1px;
+            border: 2px solid rgba(255, 255, 255, .45);
+            border-top-color: #fff; border-radius: 50%;
+            animation: spin .7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 失败时抖一抖 */
+        .shake { animation: shake .4s; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-8px); }
+            40% { transform: translateX(7px); }
+            60% { transform: translateX(-5px); }
+            80% { transform: translateX(3px); }
+        }
+
+        .demo-hint {
+            margin-top: 16px; padding: 9px 12px; border-radius: 8px;
+            background: #f7f8fa; font-size: 12px; color: #8a90a0;
+            font-family: Consolas, monospace; line-height: 1.6;
+        }
+        .demo-hint b { color: #1d6fea; }
+
+        /* ---------- 顶部 toast ---------- */
+        .toast-wrap {
+            position: fixed; top: 22px; left: 50%; transform: translateX(-50%);
+            display: flex; flex-direction: column; align-items: center;
+            gap: 8px; z-index: 999; pointer-events: none;
+        }
+        .toast {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 18px; border-radius: 8px; color: #fff;
+            font-size: 13px; box-shadow: 0 8px 20px rgba(24, 40, 80, .18);
+            pointer-events: auto;
+        }
+        .toast.success { background: #27ae60; }
+        .toast.warn    { background: #e67e22; }
+        .toast.error   { background: #e74c3c; }
+
+        /* ---------- 底部调试日志 ---------- */
+        .debug {
+            position: fixed; left: 16px; bottom: 14px;
+            font-family: Consolas, monospace; font-size: 12px;
+            color: #5b6b8c;
+            background: rgba(255, 255, 255, .8);
+            border-left: 3px solid #1d6fea; border-radius: 0 4px 4px 0;
+            padding: 7px 12px; max-width: 60vw;
+        }
+        .debug b { color: #1d6fea; }
+
+        /* 注册面板初始隐藏（jQuery 的 fadeIn 会写行内 display，优先级高于这个类） */
+        .panel.hidden { display: none; }
+    </style>
+</head>
+
+<body>
+    <div class="card" id="card">
+        <div class="brand">
+            <h1>欢迎回来 👋</h1>
+            <p>请登录你的账号，或先注册一个</p>
+            <span class="api-line">fadeIn() · slideDown() · is(':visible')</span>
+        </div>
+
+        <!-- 登录 / 注册 Tab -->
+        <div class="tabs">
+            <button class="tab active" data-panel="login">登录</button>
+            <button class="tab" data-panel="register">注册</button>
+        </div>
+
+        <!-- ============ 登录面板 ============ -->
+        <form class="panel" id="loginPanel" novalidate>
+            <div class="field">
+                <div class="input-wrap">
+                    <input type="text" id="loginEmail" placeholder="邮箱 / 手机号" autocomplete="username">
+                </div>
+                <div class="tip"></div>
+            </div>
+
+            <div class="field">
+                <div class="input-wrap">
+                    <input type="password" id="loginPwd" placeholder="密码" autocomplete="current-password">
+                    <span class="eye" title="显示 / 隐藏密码">👁</span>
+                </div>
+                <div class="tip"></div>
+            </div>
+
+            <div class="row-between">
+                <label><input type="checkbox" id="remember"> 记住我</label>
+                <span class="link" id="forgot">忘记密码？</span>
+            </div>
+
+            <button class="btn-submit" type="submit" id="loginBtn">登 录</button>
+
+            <div class="demo-hint">
+                演示账号：<b>admin@demo.com</b> / 密码：<b>123456</b>
+            </div>
+        </form>
+
+        <!-- ============ 注册面板（初始隐藏） ============ -->
+        <form class="panel hidden" id="registerPanel" novalidate>
+            <div class="field">
+                <div class="input-wrap">
+                    <input type="text" id="regEmail" placeholder="邮箱 / 手机号">
+                </div>
+                <div class="tip"></div>
+            </div>
+
+            <div class="field">
+                <div class="input-wrap">
+                    <input type="password" id="regPwd" placeholder="设置密码（至少 6 位）">
+                    <span class="eye" title="显示 / 隐藏密码">👁</span>
+                </div>
+                <div class="tip"></div>
+            </div>
+
+            <div class="field">
+                <div class="input-wrap">
+                    <input type="password" id="regPwd2" placeholder="确认密码">
+                    <span class="eye" title="显示 / 隐藏密码">👁</span>
+                </div>
+                <div class="tip"></div>
+            </div>
+
+            <button class="btn-submit" type="submit" id="regBtn">注 册</button>
+        </form>
+    </div>
+
+    <!-- toast 容器 -->
+    <div class="toast-wrap" id="toastWrap"></div>
+    <!-- 调试日志 -->
+    <div class="debug" id="debug">点按钮试试，这里会实时显示状态变化</div>
+
+    <!-- 外部 CDN 引入 jQuery 4.0.0（国内推荐 bootcdn）-->
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/4.0.0/jquery.min.js"></script>
+    <script>
+        var DEMO = { email: 'admin@demo.com', pwd: '123456' };
+
+        function log(html) {
+            $('#debug').html(html);
+        }
+
+        /* ============================================================
+           ① 登录 / 注册面板切换：同一时刻只允许一个面板可见
+           ============================================================ */
+        $('.tab').on('click', function () {
+            var $tab = $(this);
+            if ($tab.hasClass('active')) return;          // 已经选中就别重复动画
+
+            $tab.addClass('active').siblings('.tab').removeClass('active');
+
+            var target = '#' + $tab.data('panel') + 'Panel';   // #loginPanel / #registerPanel
+
+            // 关键：先隐藏"另一个面板"，再显示目标面板。
+            // 如果写成 $('.panel').fadeOut(...).fadeIn()，隐藏和显示会互相打断
+            $('.panel').not(target).stop(true, true).fadeOut(150);
+            $(target).stop(true, true).fadeIn(200);
+
+            log('面板切换 → <b>' + target + '</b>（另一个 fadeOut，目标 fadeIn）');
+        });
+
+        /* ============================================================
+           ② 错误提示的显示与隐藏：setTip 统一处理
+           ============================================================ */
+        // msg 为空字符串 = 校验通过，收起提示；否则显示提示
+        function setTip($input, msg) {
+            var $tip = $input.closest('.field').find('.tip');
+
+            if (msg) {
+                $input.addClass('error');
+                $tip.text(msg).stop(true, true).slideDown(130);
+                return false;
+            }
+
+            $input.removeClass('error');
+            $tip.stop(true, true).slideUp(130);
+            return true;
+        }
+
+        var EMAIL_RE = /^[\w.+-]+@[\w-]+\.[\w.]+$/;
+        var PHONE_RE = /^1\d{10}$/;
+
+        function checkEmail($input) {
+            var v = $.trim($input.val());
+            if (v === '') return setTip($input, '请输入邮箱或手机号');
+            if (!EMAIL_RE.test(v) && !PHONE_RE.test(v)) return setTip($input, '邮箱或手机号格式不正确');
+            return setTip($input, '');
+        }
+
+        function checkPwd($input, min) {
+            var v = $input.val();
+            if (v === '') return setTip($input, '请输入密码');
+            if (v.length < (min || 6)) return setTip($input, '密码至少 6 位');
+            return setTip($input, '');
+        }
+
+        /* 输入过程中不主动报红，只把"已经改对"的提示收起来，
+           等失焦(blur)再做完整校验——这就是典型的"显示时机"决策 */
+        function bindCheck($input, checker) {
+            $input.on('blur', function () {
+                checker($(this));
+            }).on('input', function () {
+                var $i = $(this);
+                // is(':visible') 判断提示当前是不是露着，露着才值得重新校验
+                if ($i.closest('.field').find('.tip').is(':visible')) {
+                    checker($i);
+                }
+            });
+        }
+
+        bindCheck($('#loginEmail'), checkEmail);
+        bindCheck($('#loginPwd'), checkPwd);
+        bindCheck($('#regEmail'), checkEmail);
+        bindCheck($('#regPwd'), checkPwd);
+
+        // 确认密码：只跟上面的密码比，不单独判长度
+        $('#regPwd2').on('input blur', function () {
+            var $i = $(this);
+            if ($i.val() === '') return setTip($i, '请再输入一次密码');
+            if ($i.val() !== $('#regPwd').val()) return setTip($i, '两次输入的密码不一致');
+            return setTip($i, '');
+        });
+
+        /* ============================================================
+           ③ 密码可见性切换：本质是"眼睛图标和 input type 的同步切换"
+           ============================================================ */
+        $('.eye').on('click', function () {
+            var $eye = $(this);
+            var $input = $eye.siblings('input');
+
+            var toText = $input.attr('type') === 'password';
+            $input.attr('type', toText ? 'text' : 'password');
+            $eye.text(toText ? '🙈' : '👁');
+
+            log('密码框 type = <b>' + $input.attr('type') + '</b>');
+        });
+
+        /* ============================================================
+           ④ 按钮的加载态：文字和 spinner 的显示切换
+           ============================================================ */
+        function setLoading($btn, on, text) {
+            $btn.prop('disabled', on);
+            $btn.html(on ? '<span class="spinner"></span>' + text + '…' : text);
+        }
+
+        function shakeCard() {
+            var $card = $('#card');
+            $card.removeClass('shake');
+            void $card[0].offsetWidth;   // 强制重排，否则连续两次抖动动画不会重播
+            $card.addClass('shake');
+        }
+
+        /* ============================================================
+           ⑤ Toast：淡入 → 定时淡出 → 自己移除
+           ============================================================ */
+        function toast(msg, type) {
+            var $t = $('<div class="toast"></div>')
+                .addClass(type)
+                .append($('<span/>').text(msg))
+                .hide()
+                .appendTo('#toastWrap')
+                .stop(true, true).fadeIn(200);
+
+            setTimeout(function () {
+                $t.stop(true, true).fadeOut(260, function () { $(this).remove(); });
+            }, 2200);
+        }
+
+        /* ============================================================
+           ⑥ 提交登录
+           ============================================================ */
+        $('#loginPanel').on('submit', function (e) {
+            e.preventDefault();       // 阻止表单真的跳转
+
+            var okEmail = checkEmail($('#loginEmail'));
+            var okPwd = checkPwd($('#loginPwd'));
+
+            if (!okEmail || !okPwd) {
+                toast('请先修正表单里的错误', 'error');
+                log('校验未通过 → 提示 slideDown，不发起请求');
+                return;
+            }
+
+            var $btn = $('#loginBtn');
+            setLoading($btn, true, '登录中');
+            log('已提交 → 按钮进入加载态（disabled + spinner）');
+
+            // 模拟一次接口请求
+            setTimeout(function () {
+                setLoading($btn, false, '登 录');
+
+                if ($('#loginEmail').val() === DEMO.email && $('#loginPwd').val() === DEMO.pwd) {
+                    toast('登录成功，正在进入系统…', 'success');
+                    log('登录成功' + ($('#remember').prop('checked') ? ' · 已勾选记住我' : ''));
+                } else {
+                    toast('账号或密码不正确', 'error');
+                    setTip($('#loginPwd'), '账号或密码不正确');
+                    shakeCard();
+                    log('登录失败 → 提示显示 + 卡片抖动');
+                }
+            }, 1000);
+        });
+
+        /* ============================================================
+           ⑦ 提交注册
+           ============================================================ */
+        $('#registerPanel').on('submit', function (e) {
+            e.preventDefault();
+
+            var ok1 = checkEmail($('#regEmail'));
+            var ok2 = checkPwd($('#regPwd'));
+            var ok3 = ($('#regPwd2').val() === $('#regPwd').val() && $('#regPwd2').val() !== '')
+                ? setTip($('#regPwd2'), '')
+                : setTip($('#regPwd2'), $('#regPwd2').val() === '' ? '请再输入一次密码' : '两次输入的密码不一致');
+
+            if (!ok1 || !ok2 || !ok3) {
+                toast('请先修正表单里的错误', 'error');
+                return;
+            }
+
+            var $btn = $('#regBtn');
+            setLoading($btn, true, '注册中');
+
+            setTimeout(function () {
+                setLoading($btn, false, '注 册');
+                toast('注册成功，请登录', 'success');
+
+                // 注册完切回登录面板，并把邮箱带过去
+                var email = $('#regEmail').val();
+                $('.tab[data-panel="login"]').trigger('click');
+                $('#loginEmail').val(email);
+                $('#loginPwd').val('').trigger('focus');
+
+                log('注册成功 → 切回登录面板，邮箱已带入');
+            }, 1000);
+        });
+
+        /* ============================================================
+           ⑧ 忘记密码
+           ============================================================ */
+        $('#forgot').on('click', function () {
+            var $email = $('#loginEmail');
+
+            if (!checkEmail($email)) {
+                toast('请先填写正确的邮箱', 'warn');
+                $email.trigger('focus');
+                return;
+            }
+
+            toast('重置密码的链接已发送至 ' + $email.val(), 'success');
+            log('已发送重置邮件到 <b>' + $email.val() + '</b>');
+        });
+    </script>
+</body>
+
+</html>
