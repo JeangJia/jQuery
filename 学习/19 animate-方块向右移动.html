@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<!-- ============================================================
+     案例 19 —— animate 自定义动画：方块向右移动（不变色 / 变色）
+     【知识点】
+       1. animate(params, speed, easing, callback)
+          params：必须是【数值型】CSS 属性（left / top / width / opacity ...）
+          speed：毫秒 或 "slow"/"normal"/"fast"
+          easing：swing（默认，缓起缓停）/ linear（匀速）
+          callback：动画结束后执行
+       2. 元素必须【定位】才能移动：盒子 position:absolute + 父级 position:relative
+       3. 相对值写法：left: "+=100" 每次再往右 100px（累加）
+       4. 链式调用 = 动画排队（队列），一个跑完再跑下一个
+       5. ⚠ animate【不能】直接动画颜色（background-color 是字符串，不是数值）
+          → 解决办法：CSS transition 配合 或 引入 jQuery UI / jquery.color 插件
+       6. stop(true, true) 清空队列并跳到终点，避免连点造成的动画排队堆积
+     【案例功能】
+       ① 同一演示区内放两组按钮：单次移动（不变色 / 变色）与链式移动（不变色 / 每段换色）
+       ② 右侧实时显示 left 值、颜色、是否动画中、队列剩余长度
+       ③ 第二演示区：动画队列演示（多段入队、delay、queue 自定义动作）
+       ④ stop() / stop(true) / stop(true,true) / finish() / clearQueue() 落点对照
+     【运行方式】浏览器直接打开。
+     ============================================================ -->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>jQuery animate · 方块向右移动（不变色 / 变色）</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; max-width: 900px;
+               margin: 25px auto; color: #333; padding: 0 15px; }
+        h1 { font-size: 22px; }
+        h2 { font-size: 16px; color: #1565c0; margin: 22px 0 8px;
+             border-left: 4px solid #2196f3; padding-left: 8px; }
+        .tip { color: #666; font-size: 14px; line-height: 1.8; background: #f5f9ff;
+               border-left: 4px solid #2196f3; padding: 8px 12px; }
+        .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px 16px; margin: 10px 0; }
+        table.cmp { width: 100%; border-collapse: collapse; font-size: 14px; }
+        table.cmp th, table.cmp td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+        table.cmp th { background: #2196f3; color: #fff; }
+        code { background: #f2f2f2; padding: 1px 5px; border-radius: 3px; }
+        .hl { color: #c62828; font-weight: bold; }
+
+        .row { margin: 8px 0; }
+        button { padding: 7px 15px; margin: 4px 6px 4px 0; cursor: pointer; font-size: 13px;
+                 border: 1px solid #bbb; border-radius: 5px; background: #fff; }
+        button:hover { background: #e3f2fd; }
+        button.main { background: #2196f3; color: #fff; border-color: #1976d2; font-weight: bold; }
+        button.main:hover { background: #1976d2; }
+        button.main.color { background: #e91e63; border-color: #c2185b; }
+        button.main.color:hover { background: #c2185b; }
+
+        /* 舞台：relative 是方块能移动的前提 */
+        .wrap { display: flex; align-items: flex-start; gap: 18px; }
+        .stage { position: relative; flex: 1; height: 130px; background: #fafafa;
+                 border: 1px dashed #bbb; border-radius: 8px; overflow: hidden; }
+        .stage .ruler { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: #e0e0e0; }
+        /* 方块：absolute + left，才能被 animate 移动 */
+        #box { position: absolute; left: 0; top: 20px; width: 80px; height: 80px;
+               background: #2196f3; color: #fff; font-size: 12px; font-weight: bold;
+               line-height: 80px; text-align: center; border-radius: 8px;
+               /* 变色用 CSS 过渡完成（animate 管不了颜色，交给 transition） */
+               transition: background-color .6s linear; }
+        .status { width: 250px; font-size: 13px; line-height: 2; background: #fffde7;
+                  border: 1px solid #fbc02d; border-radius: 8px; padding: 8px 12px; }
+        .status b { color: #c62828; }
+
+        /* 第二个演示区的方块（比 #box 小一点，方便同时看两块） */
+        #box2 { position: absolute; left: 0; top: 20px; width: 70px; height: 70px;
+                background: #00897b; color: #fff; font-size: 12px; font-weight: bold;
+                line-height: 70px; text-align: center; border-radius: 8px; }
+        button.warn { background: #fff3e0; border-color: #ef6c00; color: #e65100; }
+        button.warn:hover { background: #ffe0b2; }
+        .note { font-size: 13px; color: #888; margin-top: 6px; }
+    </style>
+</head>
+<body>
+
+    <h1>▶ animate 自定义动画 · 方块向右移动</h1>
+    <div class="tip">
+        核心一句：<code>$("#box").animate({ left: "+=100" }, 600)</code> ——
+        <b>能动画的必须是数值型属性</b>（left / top / width / opacity…）。
+        方块要移动，前提是自己 <code>position:absolute</code>、父级 <code>position:relative</code>。<br>
+        ⚠ <span class="hl">animate 不能直接动画颜色</span>（<code>background-color</code> 不是数值），
+        所以「变色」由 CSS <code>transition</code> 和 animate <b>同时开始、同样时长</b>来配合完成。
+    </div>
+
+    <table class="cmp" style="margin-top:10px">
+        <tr><th>参数</th><th>说明</th><th>本例取值</th></tr>
+        <tr><td>params</td><td>目标样式（数值型，支持 "+=100" 相对值）</td><td><code>{ left: "+=100" }</code></td></tr>
+        <tr><td>speed</td><td>毫秒 / slow(600) / normal(400) / fast(200)</td><td>600</td></tr>
+        <tr><td>easing</td><td>swing（默认，缓起缓停）/ linear（匀速）</td><td>swing</td></tr>
+        <tr><td>callback</td><td>动画结束后执行</td><td>弹提示 / 复位</td></tr>
+    </table>
+
+    <h2>演示区：向右移动（不变色 / 变色）+ 链式排队</h2>
+    <div class="card">
+        <div class="wrap">
+            <div class="stage">
+                <div class="ruler"></div>
+                <div id="box">方块</div>
+            </div>
+            <div class="status">
+                当前 left：<b id="vLeft">0</b> px<br>
+                当前颜色：<b id="vColor">#2196f3</b><br>
+                是否动画中：<b id="vAni">否</b><br>
+                队列剩余：<b id="vQueue">0</b> 个
+            </div>
+        </div>
+
+        <div class="row">
+            <button id="btnMove" class="main">▶ 向右移动（不变色）</button>
+            <button id="btnMoveColor" class="main color">▶ 向右移动 + 变色</button>
+            <button id="btnBack">⬅ 回到起点</button>
+            <button id="btnStop">■ stop()</button>
+        </div>
+        <div class="row">
+            <button id="btnChain">链式：右 → 右 → 右（不变色，各 400ms）</button>
+            <button id="btnChainColor">链式：右 → 右 → 右（每段换色）</button>
+            <button id="btnTo300">直接定位到 left:300</button>
+        </div>
+
+        <div class="note">
+            不变色：<code>$("#box").animate({ left: "+=100" }, 600)</code><br>
+            变色：<code>$("#box").css("background-color", 新色).animate({ left: "+=100" }, 600)</code>
+            —— 两者都是 600ms，一个动位置、一个动颜色，视觉上就是「边走边变色」。<br>
+            链式：<code>.animate({left:"+=100"},400).animate({left:"+=100"},400).animate({left:"+=100"},400)</code>
+            —— 后一个会<b>排队</b>等前一个跑完（看右侧「队列剩余」），这就是 animate 的动画队列。
+        </div>
+    </div>
+
+    <h2>二、动画队列 & stop 对照实验</h2>
+    <div class="card">
+        <div class="wrap">
+            <div class="stage">
+                <div class="ruler"></div>
+                <div id="box2">方块 2</div>
+            </div>
+            <div class="status">
+                当前位置：left <b id="vL2">0</b> / top <b id="vT2">20</b><br>
+                队列剩余：<b id="vQ2">0</b> 个<br>
+                是否动画中：<b id="vA2">否</b><br>
+                上次操作：<b id="vOp">—</b>
+            </div>
+        </div>
+
+        <div class="row">
+            <button id="qStart" class="main">① 入队 4 段：右 → 下 → 左 → 上（各 700ms）</button>
+            <button id="qDelay">② 入队含 delay(800)：先停一下再走</button>
+            <button id="qCustom">③ queue() 手动入队一个自定义动作</button>
+        </div>
+        <div class="row">
+            <button id="s1" class="warn">stop()</button>
+            <button id="s2" class="warn">stop(true)</button>
+            <button id="s3" class="warn">stop(true, true)</button>
+            <button id="s4" class="warn">finish()</button>
+            <button id="s5" class="warn">clearQueue()</button>
+            <button id="qReset">重置方块 2</button>
+        </div>
+
+        <div class="note">
+            先点 ①（盯「队列剩余」从 4 掉到 0，方块依次走完四段），再重新点 ① 并在动画途中点下面不同的停止按钮，对比落点：<br>
+            <code>stop()</code> —— 只停<b>当前</b>这一段，停在半路，<b>后面的队列照跑</b>（方块还会继续动）／
+            <code>stop(true)</code> —— 清空队列，但<b>停在半路</b>不动了／
+            <code>stop(true, true)</code> —— 清空队列并<b>直接跳到当前这一段的终点</b>／
+            <code>finish()</code> —— 把<b>整个队列全部瞬间跑完</b>，直接到最终状态／
+            <code>clearQueue()</code> —— 只清掉排队的部分，<b>当前这段继续跑完</b>。
+        </div>
+    </div>
+
+    <script>
+        $(function () {
+
+            /* 舞台宽度限制：方块最多走到 (舞台宽 - 方块宽) */
+            function maxLeft() {
+                return $("#box").parent().width() - $("#box").outerWidth();
+            }
+
+            /* ---------- 右侧状态面板 ---------- */
+            setInterval(function () {
+                var $b = $("#box");
+                $("#vLeft").text(Math.round(parseFloat($b.css("left")) || 0));
+                $("#vColor").text($b.css("background-color"));
+                $("#vAni").text($b.is(":animated") ? "是" : "否");
+                $("#vQueue").text($b.queue().length);
+            }, 80);
+
+            /* =========================================================
+               ① 向右移动 —— 不变色
+               ========================================================= */
+            $("#btnMove").click(function () {
+                var $b = $("#box");
+                var target = Math.min((parseFloat($b.css("left")) || 0) + 100, maxLeft());
+                $b.stop(true, false).animate({ left: target }, 600);
+            });
+
+            /* =========================================================
+               ② 向右移动 + 变色
+                  animate 管位置，CSS transition 管颜色，两个都设 600ms
+               ========================================================= */
+            var colors = ["#2196f3", "#4caf50", "#ff9800", "#e91e63", "#9c27b0", "#00bcd4"];
+            var ci = 0;
+            $("#btnMoveColor").click(function () {
+                var $b = $("#box");
+                var target = Math.min((parseFloat($b.css("left")) || 0) + 100, maxLeft());
+                ci = (ci + 1) % colors.length;          // 换下一个颜色
+                $b.css("background-color", colors[ci]); // CSS 过渡：0.6s 渐变到新色
+                $b.stop(true, false).animate({ left: target }, 600);
+            });
+
+            /* 回到起点 */
+            $("#btnBack").click(function () {
+                $("#box").stop(true, false).animate({ left: 0 }, 600);
+            });
+
+            /* stop(true, true)：清空队列并直接跳到终点 */
+            $("#btnStop").click(function () {
+                $("#box").stop(true, true);
+            });
+
+            /* =========================================================
+               ③ 链式排队：连续走三段
+               ========================================================= */
+            $("#btnChain").click(function () {
+                var $b = $("#box").stop(true, true);
+                var left = parseFloat($b.css("left")) || 0;
+                for (var i = 0; i < 3; i++) {                  // 依次入队 3 段，后一段等前一段跑完
+                    left = Math.min(left + 100, maxLeft());
+                    $b.animate({ left: left }, 400);
+                }
+            });
+            $("#btnChainColor").click(function () {
+                var $b = $("#box").stop(true, true);
+                var left = parseFloat($b.css("left")) || 0;
+                for (var i = 0; i < 3; i++) {
+                    left = Math.min(left + 100, maxLeft());
+                    $b.animate({ left: left }, {
+                        duration: 400,
+                        start: function () {                   // 每段开始时换色
+                            ci = (ci + 1) % colors.length;
+                            $(this).css("background-color", colors[ci]);
+                        }
+                    });
+                }
+            });
+            $("#btnTo300").click(function () {
+                // 绝对值写法（不是累加）：直接定位到 left:300
+                $("#box").stop(true, true).animate({ left: Math.min(300, maxLeft()) }, 600);
+            });
+
+            /* =========================================================
+               ④ 队列 & stop 对照实验（第二个演示区）
+               ========================================================= */
+            var $b2 = $("#box2");
+
+            /* 状态面板 */
+            setInterval(function () {
+                $("#vL2").text(Math.round(parseFloat($b2.css("left")) || 0));
+                $("#vT2").text(Math.round(parseFloat($b2.css("top")) || 0));
+                $("#vQ2").text($b2.queue().length);
+                $("#vA2").text($b2.is(":animated") ? "是" : "否");
+            }, 80);
+
+            function mark(op) { $("#vOp").text(op); }
+
+            /* ① 入队 4 段：右 → 下 → 左 → 上 */
+            $("#qStart").click(function () {
+                mark("入队 4 段");
+                $b2.stop(true, true).css({ left: 0, top: 20 })   // 先复位，保证每次都从起点跑
+                   .animate({ left: 200 }, 700)
+                   .animate({ top: 55 }, 700)
+                   .animate({ left: 30 }, 700)
+                   .animate({ top: 20 }, 700);
+            });
+
+            /* ② 队列里的 delay：等待也是队列的一员 */
+            $("#qDelay").click(function () {
+                mark("入队 delay(800)");
+                $b2.stop(true, true).css({ left: 0, top: 20 })
+                   .animate({ left: 150 }, 500)
+                   .delay(800)                                  // 队列里插一段"什么都不做"的等待
+                   .animate({ left: 300 }, 500);
+            });
+
+            /* ③ queue() 手动入队自定义动作：next() 不放行，队列就卡住 */
+            $("#qCustom").click(function () {
+                mark("queue 自定义动作");
+                $b2.stop(true, true).css({ left: 0, top: 20 })
+                   .animate({ left: 150 }, 600)
+                   .queue(function (next) {                    // next = 让下一个出队
+                       $(this).css("background-color", "#e91e63");
+                       setTimeout(next, 1000);                 // 1 秒后才放行 → 队列在这停 1 秒
+                   })
+                   .animate({ left: 300 }, 600);
+            });
+
+            /* ---- 五种停止方式对照 ---- */
+            $("#s1").click(function () { mark("stop()");            $b2.stop(); });              // 停当前，后续继续
+            $("#s2").click(function () { mark("stop(true)");        $b2.stop(true); });          // 清队列，停半路
+            $("#s3").click(function () { mark("stop(true,true)");   $b2.stop(true, true); });    // 清队列并跳终点
+            $("#s4").click(function () { mark("finish()");          $b2.finish(); });            // 整个队列瞬间跑完
+            $("#s5").click(function () { mark("clearQueue()");      $b2.clearQueue(); });        // 只清后续，当前跑完
+
+            $("#qReset").click(function () {
+                mark("重置");
+                $b2.stop(true, true).clearQueue().css({ left: 0, top: 20, "background-color": "#00897b" });
+            });
+        });
+    </script>
+</body>
+</html>

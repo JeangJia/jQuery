@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<!-- ============================================================
+     案例 21 —— 用 jQuery 动画做轮播图（淡入淡出 / 滑动两种）
+     【知识点】
+       1. 两种主流切换方式
+          淡入淡出：fadeOut / fadeIn 交叉（两张叠在一起，谁在上谁可见）
+          滑动：animate({ left: ±宽度 }) 把新图推入、旧图推出
+       2. 轮播必备五件套：左右箭头、圆点指示、自动播放、hover 暂停、循环到第 1 张
+       3. 动画最佳实践（上一节清单的落地）：
+          ① 每次切换前 stop(true, true) —— 连点箭头不会排队堆积
+          ② :animated / busy 标志 —— 动画没跑完不响应，避免半张图卡住
+          ③ 多元素动画收尾用 promise().done()，别写在单个回调里（会执行多次）
+          ④ 等待用队列 delay()；定时器播放和动画互不干扰
+       4. 滑动用 px 计算：left = -index * 视口宽度，窗口 resize 后要重算
+     【运行方式】浏览器直接打开。
+     ============================================================ -->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>jQuery 动画 · 轮播图（淡入淡出 / 滑动）</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; max-width: 760px;
+               margin: 25px auto; color: #333; padding: 0 15px; }
+        h1 { font-size: 22px; }
+        h2 { font-size: 16px; color: #1565c0; margin: 26px 0 10px;
+             border-left: 4px solid #2196f3; padding-left: 8px; }
+        .tip { color: #666; font-size: 14px; line-height: 1.8; background: #f5f9ff;
+               border-left: 4px solid #2196f3; padding: 8px 12px; }
+        code { background: #f2f2f2; padding: 1px 5px; border-radius: 3px; }
+        .hl { color: #c62828; font-weight: bold; }
+        .note { font-size: 13px; color: #888; line-height: 1.9; margin-top: 8px; }
+        .card { border: 1px solid #ddd; border-radius: 10px; padding: 14px 16px; margin: 10px 0; }
+
+        /* ---------- 轮播通用结构 ---------- */
+        .slider { position: relative; }               /* 定位父级：箭头/圆点/图片都基于它 */
+        .viewport { position: relative; height: 260px; overflow: hidden; border-radius: 10px; }
+        /* 注意：show()/fadeIn() 会把 display 恢复成 block，
+           所以居中不要靠 display:flex，用 padding 排版最稳 */
+        .slide { position: absolute; inset: 0; display: none; color: #fff;
+                 text-align: center; padding-top: 92px; }
+        .slide:first-child { display: block; }
+        .slide b { display: block; font-size: 30px; font-weight: bold; letter-spacing: 2px; }
+        .slide span { display: block; margin-top: 12px; font-size: 15px; opacity: .92; }
+
+        /* 左右箭头 */
+        .arrow { position: absolute; top: 50%; transform: translateY(-50%);
+                 width: 38px; height: 38px; line-height: 36px; text-align: center;
+                 border: none; border-radius: 50%; background: rgba(0,0,0,.35);
+                 color: #fff; font-size: 20px; cursor: pointer; z-index: 10; }
+        .arrow:hover { background: rgba(0,0,0,.6); }
+        .arrow.prev { left: 10px; }
+        .arrow.next { right: 10px; }
+
+        /* 圆点指示 */
+        .dots { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center; z-index: 10; }
+        .dots i { display: inline-block; width: 10px; height: 10px; margin: 0 5px;
+                  background: rgba(255,255,255,.5); border-radius: 50%; cursor: pointer; }
+        .dots i.on { background: #fff; width: 22px; border-radius: 6px; }
+
+        /* 状态条 */
+        .bar { display: flex; justify-content: space-between; align-items: center;
+               font-size: 13px; color: #666; margin-top: 8px; }
+        .bar b { color: #c62828; }
+        .bar button { padding: 4px 12px; font-size: 12px; cursor: pointer;
+                      border: 1px solid #bbb; border-radius: 4px; background: #fff; }
+        .bar button:hover { background: #e3f2fd; }
+    </style>
+</head>
+<body>
+
+    <h1>🎠 轮播图 · jQuery 动画实战</h1>
+    <div class="tip">
+        两种切换方式：<b>淡入淡出</b>用 <code>fadeOut / fadeIn</code> 交叉；<b>滑动</b>用
+        <code>animate({ left: ±宽度 })</code> 把新图推进来。<br>
+        两个轮播都套用了动画规范：切换前 <code>stop(true, true)</code>、动画中用
+        <span class="hl">busy 标志</span>挡住重复触发、结尾用 <code>promise().done()</code> 统一收尾。
+    </div>
+
+    <h2>一、淡入淡出轮播（fadeOut / fadeIn 交叉）</h2>
+    <div class="card">
+        <div class="slider" id="s1">
+            <div class="viewport">
+                <div class="slide" style="background:linear-gradient(135deg,#42a5f5,#1e88e5)">
+                    <b>第一张 · 淡入淡出</b><span>fadeOut 与 fadeIn 同时进行，视觉最柔和</span></div>
+                <div class="slide" style="background:linear-gradient(135deg,#66bb6a,#43a047)">
+                    <b>第二张 · 春天</b><span>两张叠放，谁 z-index 高谁看得见</span></div>
+                <div class="slide" style="background:linear-gradient(135deg,#ffa726,#fb8c00)">
+                    <b>第三张 · 秋天</b><span>切换时先 stop，连点也不会排队</span></div>
+                <div class="slide" style="background:linear-gradient(135deg,#ec407a,#d81b60)">
+                    <b>第四张 · 花海</b><span>最后一张再点下一张 → 回到第一张</span></div>
+            </div>
+            <button class="arrow prev">‹</button>
+            <button class="arrow next">›</button>
+            <div class="dots"></div>
+        </div>
+        <div class="bar">
+            <span>当前第 <b class="idx">1</b> / <b class="total">4</b> 张 ·
+                  动画中：<b class="ani">否</b> · 队列：<b class="q">0</b></span>
+            <span>
+                <button class="auto">暂停自动播放</button>
+            </span>
+        </div>
+    </div>
+
+    <h2>二、滑动轮播（animate 位移）</h2>
+    <div class="card">
+        <div class="slider" id="s2">
+            <div class="viewport">
+                <div class="slide" style="background:linear-gradient(135deg,#5c6bc0,#3949ab)">
+                    <b>第一张 · 滑动</b><span>animate 改 left，配合 overflow:hidden 裁掉多余部分</span></div>
+                <div class="slide" style="background:linear-gradient(135deg,#26c6da,#0097a7)">
+                    <b>第二张 · 海洋</b><span>新图从右侧推入，旧图同时往左推出</span></div>
+                <div class="slide" style="background:linear-gradient(135deg,#9ccc65,#7cb342)">
+                    <b>第三张 · 草原</b><span>方向反了就反推：点上一张从左边进来</span></div>
+                <div class="slide" style="background:linear-gradient(135deg,#8d6e63,#5d4037)">
+                    <b>第四张 · 沙漠</b><span>位移用 px：left = ±视口宽度</span></div>
+            </div>
+            <button class="arrow prev">‹</button>
+            <button class="arrow next">›</button>
+            <div class="dots"></div>
+        </div>
+        <div class="bar">
+            <span>当前第 <b class="idx">1</b> / <b class="total">4</b> 张 ·
+                  动画中：<b class="ani">否</b> · 队列：<b class="q">0</b></span>
+            <span>
+                <button class="auto">暂停自动播放</button>
+            </span>
+        </div>
+    </div>
+
+    <h2>三、这份轮播里用到的动画规范</h2>
+    <div class="card note">
+        ① <code>stop(true, true)</code>：每次切换先停掉上一次的残留动画并跳到终点，
+           否则狂点箭头会排一长串队，图片切换"慢半拍"。<br>
+        ② <b>busy 标志 / <code>:animated</code></b>：动画没结束就不响应新的切换请求，
+           避免出现"半张图"这种中间态。<br>
+        ③ <code>promise().done()</code>：两张图一起动时，收尾逻辑只执行一次；
+           写在单个 <code>fadeOut</code> 回调里会执行两次。<br>
+        ④ <b>hover 暂停</b>：鼠标放上去停掉定时器（用户正在看，别自动跳走），移开再恢复。<br>
+        ⑤ <b>时长 500ms</b>：位移类动画 400–600ms 最舒服；hover 类微交互才用 150–250ms。<br>
+        ⑥ <b>滑动用 px 不用 %</b>：jQuery 对百分比的插值不稳定，取视口宽度自己算最保险。
+    </div>
+
+    <script>
+        /**
+         * 轮播工厂
+         * @param {string} sel   轮播根元素选择器
+         * @param {string} mode  'fade' 淡入淡出 | 'slide' 滑动
+         */
+        function createCarousel(sel, mode) {
+            var $root    = $(sel);
+            var $view    = $root.find(".viewport");
+            var $slides  = $root.find(".slide");
+            var $dots    = $root.find(".dots");
+            var total    = $slides.length;
+            var idx      = 0;      // 当前第几张
+            var busy     = false;  // 动画进行中标志（等价于 :animated 的作用）
+            var timer    = null;   // 自动播放定时器
+            var playing  = true;
+
+            /* ---- 生成圆点 ---- */
+            $slides.each(function (i) { $dots.append("<i data-i='" + i + "'></i>"); });
+            var $dot = $dots.children();
+
+            function render() {
+                $root.parent().find(".idx").text(idx + 1);
+                $root.parent().find(".total").text(total);
+                $root.parent().find(".ani").text(busy ? "是" : "否");
+                $root.parent().find(".q").text($slides.eq(idx).queue().length);
+                $dot.removeClass("on").eq(idx).addClass("on");
+            }
+
+            /**
+             * 切换到第 i 张
+             * @param {number} i   目标索引
+             * @param {number} dir 1 = 下一张，-1 = 上一张（决定滑动方向）
+             */
+            function go(i, dir) {
+                if (busy || i === idx) return;         // 动画中或原地不动 → 直接忽略
+                busy = true;
+                dir = dir || (i > idx ? 1 : -1);
+
+                var $cur  = $slides.eq(idx).stop(true, true);
+                var $next = $slides.eq(i).stop(true, true);
+
+                if (mode === "fade") {
+                    /* 交叉淡入淡出：两张叠放，新图在上层淡入，旧图在下层淡出 */
+                    $cur.css("z-index", 1).fadeOut(500);
+                    $next.css("z-index", 2).fadeIn(500);
+                } else {
+                    /* 滑动：新图从一侧推入，旧图同时往另一侧推出 */
+                    var w = $view.width();
+                    $cur.css("z-index", 1)
+                        .animate({ left: dir > 0 ? -w : w }, 500, function () {
+                            $(this).hide();            // 推走后隐藏，避免挡住后面的图
+                        });
+                    $next.css({ zIndex: 2, left: dir > 0 ? w : -w }).show()
+                         .animate({ left: 0 }, 500);
+                }
+
+                idx = i;
+                render();
+
+                /* 两张图一起动 → 用 promise 等它们全部结束，只收尾一次 */
+                $cur.add($next).promise().done(function () {
+                    busy = false;
+                    render();
+                });
+            }
+
+            /* ---- 左右箭头 ---- */
+            $root.find(".arrow.next").click(function () { go((idx + 1) % total, 1); });
+            $root.find(".arrow.prev").click(function () { go((idx - 1 + total) % total, -1); });
+
+            /* ---- 圆点跳转 ---- */
+            $dots.on("click", "i", function () {
+                var i = +$(this).data("i");
+                go(i, i > idx ? 1 : -1);
+            });
+
+            /* ---- 自动播放 + hover 暂停 ---- */
+            function start() { if (!timer) timer = setInterval(function () { go((idx + 1) % total, 1); }, 3000); }
+            function stop()  { clearInterval(timer); timer = null; }
+            $root.hover(stop, function () { if (playing) start(); });   // 鼠标移入停，移出（且未被手动暂停）恢复
+
+            $root.parent().find(".auto").click(function () {
+                playing = !playing;
+                $(this).text(playing ? "暂停自动播放" : "开始自动播放");
+                playing ? start() : stop();
+            });
+
+            /* ---- 窗口尺寸变化：滑动模式的位置基于 px，需要重算 ---- */
+            $(window).resize(function () {
+                if (mode === "slide") {
+                    $slides.stop(true, true).css("left", 0).hide().eq(idx).show();
+                }
+                render();
+            });
+
+            render();
+            start();
+        }
+
+        $(function () {
+            createCarousel("#s1", "fade");
+            createCarousel("#s2", "slide");
+
+            /* 状态条里的"动画中"需要持续刷新（:animated 真实反映动画状态） */
+            setInterval(function () {
+                $(".slider").each(function () {
+                    var animating = $(this).find(".slide").is(":animated");
+                    $(this).closest(".card").find(".ani").text(animating ? "是" : "否");
+                });
+            }, 100);
+        });
+    </script>
+</body>
+</html>
